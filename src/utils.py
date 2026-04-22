@@ -1,4 +1,5 @@
-import doctest
+import glob
+import pathlib
 from io import BytesIO
 from typing import Optional
 import PyPDF2
@@ -183,7 +184,24 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
 
 if __name__ == "__main__":
     
-    print(find_page_index_by_first_text(
-        r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\ОК.09.24СТ-ООС.pdf",
-        "ВВЕДЕНИЕ"
-    ))
+    # найти номер страницы файла, где заголовком будет text
+    
+    # text = "АННОТАЦИЯ"
+    # print(
+    #     find_page_index_by_first_text(
+    #         r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\trim\ОК.02.24 СТ-ООС.pdf",
+    #         text=text
+    #     )
+    # )
+
+
+    # обрезать исходные pdf
+    
+    # for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
+    #     bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
+    #     pth = pathlib.Path(f)
+    #     new_name = pth.parent / "trim" /pth.name
+    #     with open(new_name, "wb") as new_file:
+    #         new_file.write(bytes_)
+    
+    pass
