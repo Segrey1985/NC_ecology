@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from docxtpl import DocxTemplate
 
-from src.logger import logger
+from src.utils.logger import logger
 
 
 def fill_template(
