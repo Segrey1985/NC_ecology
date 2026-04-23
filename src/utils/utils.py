@@ -58,8 +58,8 @@ def extract_pages(
         # Закрываем файл, если он был открыт
         if not isinstance(input_pdf, bytes):
             input_pdf_file.close()
-            
-            
+
+
 def extract_text_with_miner_coords(
     pdf_path,
     y_tolerance: float = 5,
@@ -152,7 +152,6 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
     try:
         reader = PyPDF2.PdfReader(input_pdf_file)
 
-
         for page_idx, page in enumerate(reader.pages):
             page_content: list[str] = extract_text_with_miner_coords(
                 input_pdf_file,
@@ -181,11 +180,10 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
             input_pdf_file.close()
 
 
-
 if __name__ == "__main__":
-    
+
     # найти номер страницы файла, где заголовком будет text
-    
+
     # text = "АННОТАЦИЯ"
     # print(
     #     find_page_index_by_first_text(
@@ -194,14 +192,13 @@ if __name__ == "__main__":
     #     )
     # )
 
-
     # обрезать исходные pdf
-    
+
     # for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
     #     bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
     #     pth = pathlib.Path(f)
     #     new_name = pth.parent / "trim" /pth.name
     #     with open(new_name, "wb") as new_file:
     #         new_file.write(bytes_)
-    
+
     pass

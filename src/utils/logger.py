@@ -19,6 +19,7 @@ def loguru_timer(func):
 
     return wrapper
 
+
 if __name__ == "__main__":
     logger.success(f"START {__name__}")
     logger.info(f"START {__name__}")
