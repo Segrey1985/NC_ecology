@@ -34,5 +34,5 @@ if __name__ == "__main__":
     fill_template(
         template_path=cfg.BASE_DIR / "data" / "IN" / "Анализ_и_введение.docx",
         data=cfg.BASE_DIR / "data" / "IN" / "Анализ_и_введение.json",
-        output_docx_path=cfg.BASE_DIR / "data" / "OUT" / "result.docx",
+        output_docx_path=cfg.BASE_DIR / "data" / "OUT" / "Анализ_и_введение_result.docx",
     )
