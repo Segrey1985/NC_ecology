@@ -75,11 +75,11 @@ class ProjectPart:
         part_ = stem.split("_")[0]
         parts_split_by_point = part_.split(".")
         if len(parts_split_by_point) == 1:
-            part = parts_split_by_point[0]
+            part_number = parts_split_by_point[0]
         else:
-            part = parts_split_by_point[0] + "." + parts_split_by_point[1]
-        payload["part"] = part
-        payload["part_name"] = self.NAME_BY_NUMBER[part]
+            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
+        payload["part_number"] = part_number
+        payload["part_name"] = self.NAME_BY_NUMBER[part_number]
 
     def __repr__(self):
         return json.dumps(
