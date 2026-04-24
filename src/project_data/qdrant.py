@@ -1,0 +1,120 @@
+import json
+from pathlib import Path
+
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+from sentence_transformers import SentenceTransformer
+
+from src.utils.logger import logger
+from src.project_data.embeddings import load_embeddings
+
+# _______________ QdrantService _______________
+
+
+class QdrantService:
+
+    def __init__(self, client: QdrantClient, model: SentenceTransformer):
+        self.client = client
+        self.model = model
+        self.vector_size = len(model.encode(["test"])[0])
+
+    def create_collection(self, collection_name: str) -> None:
+        if not self.client.collection_exists(collection_name):
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(
+                    size=self.vector_size,
+                    distance=Distance.COSINE,
+                ),
+            )
+            logger.info(f"Created collection {collection_name}.")
+
+    def add_points_to_collection(
+        self, collection_name: str, points: list[PointStruct]
+    ) -> None:
+        self.client.upsert(collection_name=collection_name, wait=True, points=points)
+
+
+def build_qdrant_service() -> QdrantService:
+    client = QdrantClient(url="http://localhost:6333")
+    model_name = "Qwen/Qwen3-Embedding-8B"
+    model = load_embeddings(model_name)
+    return QdrantService(client=client, model=model)
+
+
+# _______________ ProjectPart _______________
+
+
+class ProjectPart:
+
+    NAME_BY_NUMBER = {
+        "1": "ПЗ",
+        "2": "ПЗУ",
+        "3": "АР",
+        "4": "OK",
+        "5": "ИОС",
+        "5.1": "Система электроснабжения",
+        "5.2": "Система водоснабжения",
+        "5.3": "Система водоотведения",
+        "5.4": "Отопление, вентиляция и кондиционирование воздуха, тепловые сети",
+        "5.5": "Сети связи",
+        "5.6": "Система газоснабжения",
+    }
+
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
+        self.payload = self._build_payload()
+
+    def _build_payload(self) -> dict:
+        payload = {}
+        self._payload_add_part(payload)
+        return payload
+
+    def _payload_add_part(self, payload) -> None:
+        stem = self.file_path.stem
+        part_ = stem.split("_")[0]
+        parts_split_by_point = part_.split(".")
+        if len(parts_split_by_point) == 1:
+            part = parts_split_by_point[0]
+        else:
+            part = parts_split_by_point[0] + "." + parts_split_by_point[1]
+        payload["part"] = part
+        payload["part_name"] = self.NAME_BY_NUMBER[part]
+
+    def __repr__(self):
+        return json.dumps(
+            {"file": self.file_path.as_posix(), "payload": self.payload},
+            ensure_ascii=False,
+        )
+
+
+def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
+    project_parts = []
+    for file in folder_path.iterdir():
+        if file.suffix == ".pdf":
+            project_parts.append(ProjectPart(file_path=file))
+    return project_parts
+
+
+if __name__ == "__main__":
+
+    # test build_qdrant_service()
+
+    # qdrant_service = build_qdrant_service()
+    # COLLECTION_NAME = "project_data"
+    # qdrant_service.create_collection(collection_name=COLLECTION_NAME)
+
+    # test ProjectPart and collect_project_parts
+
+    # p = ProjectPart(
+    #     Path(
+    #         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+    #     )
+    # )
+    # print(p)
+    #
+    # parts = collect_project_parts(Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"))
+    # for p in parts:
+    #     print(p)
+
+    pass
