@@ -5,6 +5,7 @@
 # my ignore
 __*
 /checkpoints
+/data
 
 # User-specific stuff
 .idea/**/workspace.xml

@@ -194,11 +194,11 @@ if __name__ == "__main__":
 
     # обрезать исходные pdf
 
-    # for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
-    #     bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
-    #     pth = pathlib.Path(f)
-    #     new_name = pth.parent / "trim" /pth.name
-    #     with open(new_name, "wb") as new_file:
-    #         new_file.write(bytes_)
+    for f in glob.glob(r"../../data/IN/project1/*.pdf"):
+        bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
+        pth = pathlib.Path(f)
+        new_name = pth.parent / "trim" /pth.name
+        with open(new_name, "wb") as new_file:
+            new_file.write(bytes_)
 
     pass
