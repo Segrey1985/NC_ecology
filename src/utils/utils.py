@@ -64,18 +64,25 @@ def extract_text_with_miner_coords(
     pdf_path,
     y_tolerance: float = 5,
     page_numbers: list[int] | None = None,
+    ignore: tuple[float, float, float, float] | None = (
+        0.01,
+        0.01,
+        0.1,
+        0.1,
+    ),  # (top, right, bottom, left)
 ):
     """
-    Извлекает текст из PDF-файла с координатами строк, учитывая запас смещения по y.
+    Извлекает текст из PDF с координатами строк + фильтрация областей страницы.
 
-    :param pdf_path: Путь к PDF-файлу (строка)
-    :param y_tolerance: Запас смещения по y для группировки строк (по умолчанию 10)
-    :param page_numbers: Список номеров страниц (0-based) для анализа. Если None — анализировать все.
-    :return: Список строк, где каждая строка — это текст страницы с учетом структуры
+    :param pdf_path: Путь к PDF
+    :param y_tolerance: Допуск по Y для группировки строк
+    :param page_numbers: Какие страницы обрабатывать (0-based)
+    :param ignore: (top, right, bottom, left) — доли страницы (0..1), которые нужно игнорировать
+    :return: Список текстов по страницам
     """
+
     text_with_coords = []
 
-    # Извлекаем страницы из PDF
     pages_iter = (
         extract_pages_miner(pdf_path)
         if page_numbers is None
@@ -84,7 +91,25 @@ def extract_text_with_miner_coords(
 
     for page_layout in pages_iter:
         lines = []
-        # Проходим по элементам страницы
+
+        # размеры страницы
+        page_width = page_layout.width
+        page_height = page_layout.height
+
+        # границы игнора
+        if ignore:
+            top, right, bottom, left = ignore
+
+            top_limit = page_height * (1 - top)  # выше этой линии — игнор
+            bottom_limit = page_height * bottom  # ниже — игнор
+            left_limit = page_width * left
+            right_limit = page_width * (1 - right)
+        else:
+            top_limit = page_height
+            bottom_limit = 0
+            left_limit = 0
+            right_limit = page_width
+
         for element in page_layout:
             if isinstance(element, LTTextBox):
                 # Обрабатываем текстовые блоки
@@ -93,10 +118,22 @@ def extract_text_with_miner_coords(
                         # Получаем координаты и текст строки
                         x0, y0, x1, y1 = text_line.bbox
                         text = text_line.get_text().strip()
-                        if text:  # Пропускаем пустые строки
-                            lines.append((text, (x0, y0, x1, y1)))
 
-        # Сортируем строки по y1 сверху вниз
+                        if not text:
+                            continue
+
+                        # --- ФИЛЬТР ПО ГРАНИЦАМ ---
+                        if (
+                            y1 > top_limit  # слишком высоко (top)
+                            or y0 < bottom_limit  # слишком низко (bottom)
+                            or x0 < left_limit  # слишком слева (left)
+                            or x1 > right_limit  # слишком справа (right)
+                        ):
+                            continue
+
+                        lines.append((text, (x0, y0, x1, y1)))
+
+        # сортировка сверху вниз
         lines.sort(key=lambda x: -x[1][1])
 
         # Группируем строки по y-координате с учетом запаса смещения
@@ -106,6 +143,7 @@ def extract_text_with_miner_coords(
 
         for line in lines:
             text, (x0, y0, x1, y1) = line
+
             if prev_y is None or abs(y1 - prev_y) <= y_tolerance:
                 current_group.append(line)
             else:
@@ -120,7 +158,7 @@ def extract_text_with_miner_coords(
             current_group.sort(key=lambda x: x[1][0])
             grouped_lines.append(current_group)
 
-        # Объединяем текст из групп
+        # сборка текста
         page_text = ""
         for group in grouped_lines:
             group_text = " ".join([text for text, _ in group])
@@ -193,12 +231,20 @@ if __name__ == "__main__":
     # )
 
     # обрезать исходные pdf
+    #
+    # for f in glob.glob(r"../../data/IN/project1/*.pdf"):
+    #     bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
+    #     pth = pathlib.Path(f)
+    #     new_name = pth.parent / "trim" /pth.name
+    #     with open(new_name, "wb") as new_file:
+    #         new_file.write(bytes_)
 
-    for f in glob.glob(r"../../data/IN/project1/*.pdf"):
-        bytes_ = extract_pages(f, pages_to_keep=list(range(20)))
-        pth = pathlib.Path(f)
-        new_name = pth.parent / "trim" /pth.name
-        with open(new_name, "wb") as new_file:
-            new_file.write(bytes_)
+    # test extract_text_with_miner_coords()
+
+    text = extract_text_with_miner_coords(
+        r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\1_ОК.17.24СТ-ПЗ.pdf",
+        ignore=(0.01, 0.01, 0.1, 0.1),
+    )
+    print("\n".join(text))
 
     pass
