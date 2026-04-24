@@ -118,6 +118,11 @@ class ProjectPart:
             vector = model.encode(chunk)
             vectors.append(vector)
         self.vectors = vectors
+        
+    def run(self) -> None:
+        self.extract_text()
+        self.make_chunks()
+        self.calculate_vectors()
 
     def __repr__(self):
         return json.dumps(
@@ -149,11 +154,14 @@ if __name__ == "__main__":
             r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
         )
     )
-    print(p)
-    print(p.texts_by_page)
-    p.extract_text()
-    print(p.texts_by_page)
-    print(len(p.texts_by_page))
+    
+    p.run()
+    
+    # print(p)
+    # print(p.texts_by_page)
+    # p.extract_text()
+    # print(p.texts_by_page)
+    # print(len(p.texts_by_page))
     
     # p.make_chunks()
     # for ch in p.chunks:
