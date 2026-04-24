@@ -67,8 +67,8 @@ def extract_text_with_miner_coords(
     ignore: tuple[float, float, float, float] | None = (
         0.01,
         0.01,
-        0.1,
-        0.1,
+        0.07,
+        0.07,
     ),  # (top, right, bottom, left)
 ):
     """
@@ -243,7 +243,7 @@ if __name__ == "__main__":
 
     text = extract_text_with_miner_coords(
         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\1_ОК.17.24СТ-ПЗ.pdf",
-        ignore=(0.01, 0.01, 0.1, 0.1),
+        ignore=(0.01, 0.01, 0.07, 0.07),
     )
     print("\n".join(text))
 
