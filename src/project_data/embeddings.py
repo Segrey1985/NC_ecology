@@ -11,10 +11,10 @@ def load_embeddings(model_name: str):
     model_path = models_dir / model_name_str
     if os.path.exists(model_path):
         logger.debug(f"Loading local model from {model_path}...")
-        embedder = SentenceTransformer(model_path.as_posix())
+        embedder = SentenceTransformer(model_path.as_posix(), device="cuda")
     else:
         logger.debug(f"Loading model from HuggingFace...")
-        embedder = SentenceTransformer(model_name)
+        embedder = SentenceTransformer(model_name, device="cuda")
         embedder.save(model_path)
     logger.debug(f"Loading model is finished.")
     return embedder
