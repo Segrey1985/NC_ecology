@@ -1,11 +1,17 @@
 import json
 from pathlib import Path
+from typing import Optional
+from numpy import ndarray
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from sentence_transformers import SentenceTransformer
 
+from sentence_transformers import SentenceTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from config.config_file import cfg
 from src.utils.logger import logger
+from src.utils.utils import extract_text_with_miner_coords
 from src.project_data.embeddings import load_embeddings
 
 # _______________ QdrantService _______________
@@ -37,8 +43,7 @@ class QdrantService:
 
 def build_qdrant_service() -> QdrantService:
     client = QdrantClient(url="http://localhost:6333")
-    model_name = "Qwen/Qwen3-Embedding-8B"
-    model = load_embeddings(model_name)
+    model = load_embeddings(cfg.EMBEDDINGS_MODEL_NAME)
     return QdrantService(client=client, model=model)
 
 
@@ -64,6 +69,10 @@ class ProjectPart:
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
         self.payload = self._build_payload()
+        self.texts_by_page: Optional[list[str]] = None
+        self.text: Optional[str] = None
+        self.chunks: Optional[list[str]] = None
+        self.vectors: Optional[list[ndarray]] = None
 
     def _build_payload(self) -> dict:
         payload = {}
@@ -80,6 +89,35 @@ class ProjectPart:
             part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
         payload["part_number"] = part_number
         payload["part_name"] = self.NAME_BY_NUMBER[part_number]
+
+    def extract_text(self) -> None:
+        self.texts_by_page = extract_text_with_miner_coords(self.file_path)
+        self.text = " ".join(self.texts_by_page)
+
+    def make_chunks(self) -> None:
+        if not self.text:
+            raise ValueError("Cannot make chunks: ProjectPart.text is empty")
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=0,
+            is_separator_regex=True,
+            # Используем Lookahead: (?=[А-ЯЁA-Z])
+            # Это значит: "найти точку с пробелом, если за ними идет заглавная буква"
+            separators=["\n\n", r"\. (?=[А-ЯЁA-Z])"],
+            keep_separator='end'
+        )
+        chunks = text_splitter.split_text(self.text)
+        self.chunks = chunks
+
+    def calculate_vectors(self) -> None:
+        if not self.chunks:
+            raise ValueError("Cannot calculate vectors: ProjectPart.chunks list is empty")
+        model = load_embeddings(cfg.EMBEDDINGS_MODEL_NAME)
+        vectors = []
+        for chunk in self.chunks:
+            vector = model.encode(chunk)
+            vectors.append(vector)
+        self.vectors = vectors
 
     def __repr__(self):
         return json.dumps(
@@ -106,13 +144,24 @@ if __name__ == "__main__":
 
     # test ProjectPart and collect_project_parts
 
-    # p = ProjectPart(
-    #     Path(
-    #         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-    #     )
-    # )
-    # print(p)
-    #
+    p = ProjectPart(
+        Path(
+            r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+        )
+    )
+    print(p)
+    print(p.texts_by_page)
+    p.extract_text()
+    print(p.texts_by_page)
+    print(len(p.texts_by_page))
+    
+    # p.make_chunks()
+    # for ch in p.chunks:
+    #     print(ch, end="\n\n==========================\n\n")
+    
+    # p.calculate_vectors()
+    # print(p.vectors)
+
     # parts = collect_project_parts(Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"))
     # for p in parts:
     #     print(p)
