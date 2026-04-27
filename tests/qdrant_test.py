@@ -11,7 +11,7 @@ def test_qdrant_service():
     project_part.run()
     
     qdrant_service = build_qdrant_service()
-    COLLECTION_NAME = "test_collection"
+    COLLECTION_NAME = "test_data"
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
     
     qdrant_service.add_points_to_collection(
