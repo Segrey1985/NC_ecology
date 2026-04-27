@@ -1,8 +1,8 @@
 import glob
+import pypdf
 import pathlib
 from io import BytesIO
 from typing import Optional
-import PyPDF2
 from pdfminer.layout import LTTextBox, LTTextLine
 from pdfminer.high_level import extract_pages as extract_pages_miner
 
@@ -12,7 +12,7 @@ from pdfminer.high_level import extract_pages as extract_pages_miner
 def count_pages(file_path: str) -> int | None:
     try:
         with open(file_path, "rb") as file:
-            reader = PyPDF2.PdfReader(file)
+            reader = pypdf.PdfReader(file)
             return len(reader.pages)
     except Exception:
         return None
@@ -32,14 +32,14 @@ def extract_pages(
         input_pdf_file = open(input_pdf, "rb")
 
     try:
-        reader = PyPDF2.PdfReader(input_pdf_file)
-        writer = PyPDF2.PdfWriter()
+        reader = pypdf.PdfReader(input_pdf_file)
+        writer = pypdf.PdfWriter()
         valid_pages = [x + 1 for x in range(len(reader.pages))]
         valid_pages_to_keep = [x for x in pages_to_keep if x in valid_pages]
 
         # Извлекаем указанные страницы
         for page_num in valid_pages_to_keep:
-            # Нумерация страниц в PyPDF2 начинается с 0
+            # Нумерация страниц в pypdf начинается с 0
             writer.add_page(reader.pages[page_num - 1])
 
         if output_pdf_path:
@@ -188,7 +188,7 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
         input_pdf_file = open(input_pdf, "rb")
 
     try:
-        reader = PyPDF2.PdfReader(input_pdf_file)
+        reader = pypdf.PdfReader(input_pdf_file)
 
         for page_idx, page in enumerate(reader.pages):
             page_content: list[str] = extract_text_with_miner_coords(
