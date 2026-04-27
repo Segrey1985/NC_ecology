@@ -1,7 +1,7 @@
 import json
+import uuid
 from pathlib import Path
 from typing import Optional
-from numpy import ndarray
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
@@ -12,7 +12,13 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from config.config_file import cfg
 from src.utils.logger import logger
 from src.utils.utils import extract_text_with_miner_coords
-from src.project_data.embeddings import load_embeddings
+from src.project_data.embeddings import load_local_embedder, init_openai_embedder
+
+if cfg.EMBEDDINGS_LOCAL:
+    embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_PATH)
+else:
+    embedder = init_openai_embedder()
+
 
 # _______________ QdrantService _______________
 
@@ -42,9 +48,9 @@ class QdrantService:
 
 
 def build_qdrant_service() -> QdrantService:
+    """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
     client = QdrantClient(url="http://localhost:6333")
-    model = load_embeddings(cfg.EMBEDDINGS_MODEL_NAME)
-    return QdrantService(client=client, model=model)
+    return QdrantService(client=client, model=embedder)
 
 
 # _______________ ProjectPart _______________
@@ -72,7 +78,8 @@ class ProjectPart:
         self.texts_by_page: Optional[list[str]] = None
         self.text: Optional[str] = None
         self.chunks: Optional[list[str]] = None
-        self.vectors: Optional[list[ndarray]] = None
+        self.vectors: Optional[list[list[float]]] = None
+        self.points: Optional[list[PointStruct]] = None
 
     def _build_payload(self) -> dict:
         payload = {}
@@ -96,7 +103,7 @@ class ProjectPart:
 
     def make_chunks(self) -> None:
         if not self.text:
-            raise ValueError("Cannot make chunks: ProjectPart.text is empty")
+            raise ValueError("Can't make chunks: ProjectPart.text is empty")
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=0,
@@ -104,25 +111,44 @@ class ProjectPart:
             # Используем Lookahead: (?=[А-ЯЁA-Z])
             # Это значит: "найти точку с пробелом, если за ними идет заглавная буква"
             separators=["\n\n", r"\. (?=[А-ЯЁA-Z])"],
-            keep_separator='end'
+            keep_separator="end",
         )
         chunks = text_splitter.split_text(self.text)
         self.chunks = chunks
 
     def calculate_vectors(self) -> None:
         if not self.chunks:
-            raise ValueError("Cannot calculate vectors: ProjectPart.chunks list is empty")
-        model = load_embeddings(cfg.EMBEDDINGS_MODEL_NAME)
-        vectors = []
-        for chunk in self.chunks:
-            vector = model.encode(chunk)
-            vectors.append(vector)
+            raise ValueError(
+                "Cannot calculate vectors: ProjectPart.chunks list is empty"
+            )
+        vectors = embedder.encode(self.chunks)
+        vectors = [
+            vector if isinstance(vector, list) else vector.tolist()
+            for vector in vectors
+        ]
         self.vectors = vectors
-        
+
+    def calculate_points(self) -> None:
+        if not self.vectors:
+            raise ValueError(
+                "Cannot calculate points: ProjectPart.vectors list is empty"
+            )
+        points = []
+        for vector in self.vectors:
+            points.append(
+                PointStruct(
+                    id=uuid.uuid4().hex,
+                    vector=vector,
+                    payload=self.payload,
+                )
+            )
+        self.points = points
+
     def run(self) -> None:
         self.extract_text()
         self.make_chunks()
         self.calculate_vectors()
+        self.calculate_points()
 
     def __repr__(self):
         return json.dumps(
@@ -132,6 +158,7 @@ class ProjectPart:
 
 
 def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
+    """Ищет все файлы .pdf в директории и превращает их в list[ProjectPart]"""
     project_parts = []
     for file in folder_path.iterdir():
         if file.suffix == ".pdf":
@@ -140,7 +167,6 @@ def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
 
 
 if __name__ == "__main__":
-
     # test build_qdrant_service()
 
     # qdrant_service = build_qdrant_service()
@@ -149,29 +175,49 @@ if __name__ == "__main__":
 
     # test ProjectPart and collect_project_parts
 
-    p = ProjectPart(
-        Path(
-            r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-        )
-    )
-    
-    p.run()
-    
+    # p = ProjectPart(
+    #     Path(
+    #         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+    #     )
+    # )
+
+    # p.run()
+    # for i, point in enumerate(p.points):
+    #     print(point)
+    #     if i == 2:
+    #         break
+
     # print(p)
     # print(p.texts_by_page)
     # p.extract_text()
     # print(p.texts_by_page)
     # print(len(p.texts_by_page))
-    
+
     # p.make_chunks()
     # for ch in p.chunks:
     #     print(ch, end="\n\n==========================\n\n")
-    
+
     # p.calculate_vectors()
     # print(p.vectors)
 
     # parts = collect_project_parts(Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"))
     # for p in parts:
     #     print(p)
+
+    project_part = ProjectPart(
+        Path(
+            r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+        )
+    )
+    project_part.run()
+
+    qdrant_service = build_qdrant_service()
+    COLLECTION_NAME = "project_data"
+    qdrant_service.create_collection(collection_name=COLLECTION_NAME)
+
+    qdrant_service.add_points_to_collection(
+        collection_name=COLLECTION_NAME,
+        points=project_part.points,
+    )
 
     pass

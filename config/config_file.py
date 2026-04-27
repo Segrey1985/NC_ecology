@@ -16,6 +16,7 @@ class Config(BaseSettings):
 
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
+    EMBEDDINGS_LOCAL: bool = False
 
 
 cfg = Config()
