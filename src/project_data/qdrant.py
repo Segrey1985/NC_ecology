@@ -45,7 +45,15 @@ class QdrantService:
         self, collection_name: str, points: list[PointStruct]
     ) -> None:
         self.client.upsert(collection_name=collection_name, wait=True, points=points)
-
+    
+    def run_query(self, query: str, collection_name: str, limit: int = 3):
+        vector = self.model.encode([query])
+        search_result = self.client.query_points(
+            collection_name=collection_name,
+            query=vector[0],
+            limit=limit,
+        ).points
+        return search_result
 
 def build_qdrant_service() -> QdrantService:
     """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
@@ -74,28 +82,12 @@ class ProjectPart:
 
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
-        self.payload = self._build_payload()
         self.texts_by_page: Optional[list[str]] = None
         self.text: Optional[str] = None
         self.chunks: Optional[list[str]] = None
         self.vectors: Optional[list[list[float]]] = None
+        self.payload: Optional[list[dict]] = None
         self.points: Optional[list[PointStruct]] = None
-
-    def _build_payload(self) -> dict:
-        payload = {}
-        self._payload_add_part(payload)
-        return payload
-
-    def _payload_add_part(self, payload) -> None:
-        stem = self.file_path.stem
-        part_ = stem.split("_")[0]
-        parts_split_by_point = part_.split(".")
-        if len(parts_split_by_point) == 1:
-            part_number = parts_split_by_point[0]
-        else:
-            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
-        payload["part_number"] = part_number
-        payload["part_name"] = self.NAME_BY_NUMBER[part_number]
 
     def extract_text(self) -> None:
         self.texts_by_page = extract_text_with_miner_coords(self.file_path)
@@ -105,8 +97,8 @@ class ProjectPart:
         if not self.text:
             raise ValueError("Can't make chunks: ProjectPart.text is empty")
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=0,
+            chunk_size=500,
+            chunk_overlap=100,
             is_separator_regex=True,
             # Используем Lookahead: (?=[А-ЯЁA-Z])
             # Это значит: "найти точку с пробелом, если за ними идет заглавная буква"
@@ -128,25 +120,39 @@ class ProjectPart:
         ]
         self.vectors = vectors
 
+    def build_payload(self) -> None:
+        base = {}
+        self._payload_add_part(base)
+        self.payload = self._payload_add_text(base)  # теперь list[dict]
+    
+    def _payload_add_part(self, payload) -> None:
+        stem = self.file_path.stem
+        part_ = stem.split("_")[0]
+        parts_split_by_point = part_.split(".")
+        if len(parts_split_by_point) == 1:
+            part_number = parts_split_by_point[0]
+        else:
+            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
+        payload["part_number"] = part_number
+        payload["part_name"] = self.NAME_BY_NUMBER[part_number]
+    
+    
+    def _payload_add_text(self, base: dict) -> list[dict]:
+        return [{**base, "text": chunk} for chunk in self.chunks]
+    
+    
     def calculate_points(self) -> None:
         if not self.vectors:
-            raise ValueError(
-                "Cannot calculate points: ProjectPart.vectors list is empty"
-            )
-        points = []
-        for vector in self.vectors:
-            points.append(
-                PointStruct(
-                    id=uuid.uuid4().hex,
-                    vector=vector,
-                    payload=self.payload,
-                )
-            )
-        self.points = points
+            raise ValueError("Cannot calculate points: ProjectPart.vectors list is empty")
+        self.points = [
+            PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload)
+            for payload, vector in zip(self.payload, self.vectors)
+        ]
 
     def run(self) -> None:
         self.extract_text()
         self.make_chunks()
+        self.build_payload()
         self.calculate_vectors()
         self.calculate_points()
 
@@ -167,57 +173,53 @@ def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
 
 
 if __name__ == "__main__":
-    # test build_qdrant_service()
+    
+    def recreate_collection():
+        """build_qdrant_service and recreate collection"""
+        qdrant_service = build_qdrant_service()
+        COLLECTION_NAME = "project_data"
+        if qdrant_service.client.get_collection(COLLECTION_NAME) is not None:
+            qdrant_service.client.delete_collection(COLLECTION_NAME)
+        qdrant_service.create_collection(collection_name=COLLECTION_NAME)
 
-    # qdrant_service = build_qdrant_service()
-    # COLLECTION_NAME = "project_data"
-    # qdrant_service.create_collection(collection_name=COLLECTION_NAME)
-
-    # test ProjectPart and collect_project_parts
-
-    # p = ProjectPart(
-    #     Path(
-    #         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-    #     )
-    # )
-
-    # p.run()
-    # for i, point in enumerate(p.points):
-    #     print(point)
-    #     if i == 2:
-    #         break
-
-    # print(p)
-    # print(p.texts_by_page)
-    # p.extract_text()
-    # print(p.texts_by_page)
-    # print(len(p.texts_by_page))
-
-    # p.make_chunks()
-    # for ch in p.chunks:
-    #     print(ch, end="\n\n==========================\n\n")
-
-    # p.calculate_vectors()
-    # print(p.vectors)
-
-    # parts = collect_project_parts(Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"))
-    # for p in parts:
-    #     print(p)
-
-    project_part = ProjectPart(
-        Path(
-            r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+    
+    
+    def print_points():
+        """print ProjectPart point"""
+        project_part = ProjectPart(
+            Path(
+                r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+            )
         )
-    )
-    project_part.run()
+        project_part.run()
+        points, chunks = project_part.points, project_part.chunks
+        for i, x in enumerate(points):
+            print(x)
+            if i == 2:
+                break
 
-    qdrant_service = build_qdrant_service()
-    COLLECTION_NAME = "project_data"
-    qdrant_service.create_collection(collection_name=COLLECTION_NAME)
+    def run_query():
+        """create collection and find relevant points"""
+        project_part = ProjectPart(
+            Path(
+                r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
+            )
+        )
+        project_part.run()
 
-    qdrant_service.add_points_to_collection(
-        collection_name=COLLECTION_NAME,
-        points=project_part.points,
-    )
+        qdrant_service = build_qdrant_service()
+        COLLECTION_NAME = "project_data"
+        if qdrant_service.client.get_collection(COLLECTION_NAME) is not None:
+            qdrant_service.client.delete_collection(COLLECTION_NAME)
+        qdrant_service.create_collection(collection_name=COLLECTION_NAME)
+        qdrant_service.add_points_to_collection(
+            collection_name=COLLECTION_NAME,
+            points=project_part.points,
+        )
+        result = qdrant_service.run_query(query='Адрес объекта', collection_name=COLLECTION_NAME, limit=5)
+        for r in result:
+            print(r)
+            print()
+            
+        
 
-    pass
