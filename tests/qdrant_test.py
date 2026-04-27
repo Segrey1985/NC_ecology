@@ -23,8 +23,8 @@ def test_qdrant_service():
 def test_recreate_collection():
     """build_qdrant_service and recreate collection"""
     qdrant_service = build_qdrant_service()
-    COLLECTION_NAME = "project_data"
-    if qdrant_service.client.get_collection(COLLECTION_NAME) is not None:
+    COLLECTION_NAME = "test_data"
+    if qdrant_service.client.collection_exists(COLLECTION_NAME):
         qdrant_service.client.delete_collection(COLLECTION_NAME)
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
 
@@ -54,8 +54,8 @@ def test_run_query():
     project_part.run()
     
     qdrant_service = build_qdrant_service()
-    COLLECTION_NAME = "project_data"
-    if qdrant_service.client.get_collection(COLLECTION_NAME) is not None:
+    COLLECTION_NAME = "test_data"
+    if qdrant_service.client.collection_exists(COLLECTION_NAME):
         qdrant_service.client.delete_collection(COLLECTION_NAME)
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
     qdrant_service.add_points_to_collection(
