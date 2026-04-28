@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage
 from agent import graph
 from config.langfuse_client import langfuse_config
 from src.utils.utils import print_chunk
+from src.templates.template_engine import fill_template
 
 __placeholders_example = {
     "НАИМЕНОВАНИЕ_ПРОЕКТА": "Наименование проекта",
@@ -64,29 +65,49 @@ def main(
     placeholders_path: Path,
     table_placeholders_path: Path | None,
     project_parts_path: Path | None,
+    output_path: Path,
 ):
-    output = {}
     placeholders, table_placeholders = _load_placeholders(
         placeholders_path, table_placeholders_path
     )
+
+    placeholders_output = {}
     for placeholder, detailed_placeholder in placeholders.items():
         final_content = _run_graph(detailed_placeholder, verbose=True)
-        output[placeholder] = json.loads(final_content).get("answer", "__empty__")
+        placeholders_output[placeholder] = json.loads(final_content).get("answer", "__empty__")
         break
-    return output
+
+    ## mock
+    # placeholders_output = json.load(
+    #     open(
+    #         "data/mock/placeholders_output.json",
+    #         encoding="utf-8",
+    #     )
+    # )
+
+    if output_path:
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        placeholders_out_path = output_path / "placeholders.json"
+        with open(placeholders_out_path, "w", encoding="utf-8") as f:
+            json.dump(placeholders_output, f, ensure_ascii=False, indent=4)
+
+        if template_docx_path:
+            result_template_out_path = output_path / "result_template.docx"
+            fill_template(
+                template_path=template_docx_path,
+                data=placeholders_output,
+                output_docx_path=result_template_out_path,
+            )
 
 
 if __name__ == "__main__":
 
-    project_path = Path(__file__).parent
-    output = main(
-        template_docx_path=None,
-        placeholders_path=project_path
-        / "data"
-        / "IN"
-        / "templates"
-        / "Анализ_и_введение.json",
+    base = Path(__file__).parent
+    main(
+        template_docx_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.docx",
+        placeholders_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.json",
         table_placeholders_path=None,
         project_parts_path=None,
+        output_path=base / "data" / "OUT" / "project1",
     )
-    pprint(output)
