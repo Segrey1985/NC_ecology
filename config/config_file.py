@@ -13,10 +13,27 @@ class Config(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
+    
+    MODEL_NAME: str = "gemini-3.1-pro-preview"
+    TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
     EMBEDDINGS_LOCAL: bool = False
+    RERANKER_MODEL: str = "qilowoq/bge-reranker-v2-m3-en-ru"
+    
+    DISCIPLINE_BY_NUMBER: dict[str, str] = {
+        "1": "ПЗ",
+        "2": "ПЗУ",
+        "3": "АР",
+        "4": "OK",
+        "5": "ИОС",
+        "5.1": "Система электроснабжения",
+        "5.2": "Система водоснабжения",
+        "5.3": "Система водоотведения",
+        "5.4": "Отопление, вентиляция и кондиционирование воздуха, тепловые сети",
+        "5.5": "Сети связи",
+        "5.6": "Система газоснабжения",
+    }
 
 
 cfg = Config()
