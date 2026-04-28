@@ -24,6 +24,8 @@ else:
 
 
 class QdrantService:
+    
+    """Класс для создания коллекций, добавления в них точек и поиска похожих точек."""
 
     def __init__(self, client: QdrantClient, model: SentenceTransformer):
         self.client = client
