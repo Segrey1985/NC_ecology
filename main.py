@@ -23,6 +23,7 @@ from langchain_core.messages import (
 
 from src.utils.logger import logger
 from config.config_file import cfg
+from config.langfuse_client import langfuse_config
 from src.models import LlmModel
 from src.pydantic_models import RelatedDisciplinesSearch
 from src.project_data.qdrant import QdrantService, collect_project_parts, build_qdrant_service
@@ -58,8 +59,8 @@ class AgentState(MessagesState):
 
 
 @tool(args_schema=RelatedDisciplinesSearch)
-def search_related_disciplines(query: str):
-    """ найти релевантные документы """
+def search_in_related_disciplines(query: str):
+    """Найти релевантные части текста в документах смежных разделов."""
     relevant_points = qdrant_service.run_query(query, collection_name=COLLECTION_NAME, limit=30)
     texts = [point.payload['text'] for point in relevant_points]
     
@@ -67,14 +68,13 @@ def search_related_disciplines(query: str):
     return reranked
 
 
-tools_list = [search_related_disciplines]
+tools_list = [search_in_related_disciplines]
 tool_node = ToolNode(tools_list)
 
 def agent_node(state: AgentState) -> AgentState:
     system_message = SystemMessage(
         "Ты помощник по поиску данных по строительному проекту. "
-        "Для поиска можешь пользоваться search_related_disciplines. "
-        "Этот инструмент может искать по запросу релевантные части текста по смежным разделам."
+        "Для поиска информации можешь пользоваться search_in_related_disciplines."
     )
     messages = [system_message] + state["messages"]
     llm_with_tools = llm.bind_tools(tools_list)
@@ -101,12 +101,16 @@ graph = builder.compile()
 
 
 if __name__ == "__main__":
+    
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config.update(langfuse_config)
+    
     create_and_fill_collection(COLLECTION_NAME)
     
     input_messages = [HumanMessage('Сведения о прочностных и деформационных характеристиках грунта в основании объекта капитального строительства')]
     
     for chunk in graph.stream(
-            {"messages": input_messages}, stream_mode="updates"
+            {"messages": input_messages}, stream_mode="updates", config=config
     ):
         print(chunk)
         
