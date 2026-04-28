@@ -4,6 +4,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 
+models = {
+    "claude": "claude-sonnet-4.6",
+    "gemini3.1pro": "gemini-3.1-pro-preview",
+    "gpt5mini": "gpt-5-mini",
+    "gemini3.1flash": "gemini-3.1-flash-lite-preview",
+    "glm5": "glm-5",
+    "flash": "gemini-3-flash-preview",
+    "gpt5.1": "gpt-5.1",
+}
+
 
 class Config(BaseSettings):
     HF_TOKEN: str
@@ -14,7 +24,7 @@ class Config(BaseSettings):
         extra="ignore",
     )
     
-    MODEL_NAME: str = "gemini-3.1-pro-preview"
+    MODEL_NAME: str = models['flash']
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
