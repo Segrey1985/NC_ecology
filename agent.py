@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.tools import tool, BaseTool
-from langgraph.graph import MessagesState, StateGraph, START
+from langgraph.graph import MessagesState, StateGraph, START, END
 from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
@@ -26,7 +26,7 @@ from config.config_file import cfg
 from config.langfuse_client import langfuse_config
 from src.models import LlmModel
 from src.utils.utils import print_chunk
-from src.pydantic_models import RelatedDisciplinesSearch
+from src.pydantic_models import RelatedDisciplinesSearch, StructuredResponse
 from src.project_data.qdrant import QdrantService, collect_project_parts, build_qdrant_service
 from src.project_data.reranker import rerank_chunks
 
@@ -56,7 +56,7 @@ llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
 
 
 class AgentState(MessagesState):
-    pass
+    input_query: str
 
 
 @tool(args_schema=RelatedDisciplinesSearch)
@@ -91,12 +91,50 @@ def agent_node(state: AgentState) -> AgentState:
     }
 
 
+def structured_output_node(state: AgentState) -> AgentState:
+    system_message = SystemMessage(
+        "Верни ответ в формате:\n"
+        "- answer: краткий ответ на вопрос\n"
+        "- explanation: пояснение или обоснование из контекста (если есть)"
+    )
+    input_message = state["input_query"]
+    last_llm_message = 'Ответ отсутствует'
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, AIMessage):
+            last_llm_message = msg.content
+            break
+    
+    messages = [
+        system_message,
+        HumanMessage(
+            content=f"""
+            Запрос пользователя:
+            {input_message}
+
+            Ответ модели:
+            {last_llm_message}
+            """
+        )
+    ]
+    response = llm.with_structured_output(StructuredResponse).invoke(messages)
+    
+    return {
+        "messages": [AIMessage(content=response.model_dump_json())],
+    }
+
+
 builder = StateGraph(AgentState)
 builder.add_node("tools", tool_node)
 builder.add_node("agent_node", agent_node)
+builder.add_node("structured_output_node", structured_output_node)
 builder.add_edge(START, "agent_node")
-builder.add_conditional_edges("agent_node", tools_condition)
+builder.add_conditional_edges(
+    "agent_node",
+    tools_condition,
+    {"tools": "tools", END: "structured_output_node"}
+)
 builder.add_edge("tools", "agent_node")
+builder.add_edge("structured_output_node", END)
 
 graph = builder.compile()
 
@@ -107,9 +145,15 @@ if __name__ == "__main__":
     config.update(langfuse_config)
     
     # input_messages = [HumanMessage('Сведения о прочностных и деформационных характеристиках грунта в основании объекта капитального строительства')]
-    input_messages = [HumanMessage('Тип бетона для фундамента')]
+    # input_messages = [HumanMessage('Тип бетона для фундамента')]
+    input_messages = [HumanMessage('Проектируемые электросети')]
     
     for chunk in graph.stream(
-            {"messages": input_messages}, stream_mode="updates", config=config
+        input={
+            "messages": input_messages,
+            "input_query": input_messages[0].content,
+        },
+        stream_mode="updates",
+        config=config
     ):
         print_chunk(chunk)

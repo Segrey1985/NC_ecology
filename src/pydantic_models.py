@@ -16,3 +16,8 @@ class RelatedDisciplinesSearch(BaseModel):
     #     ...,
     #     description="Список разделов в которых будет поиск релевантных текстов. Использовать только при необходимости",
     # )
+
+
+class StructuredResponse(BaseModel):
+    answer: str = Field(..., description="Краткий, точный (но полный) ответ на запрос пользователя")
+    explanation: Optional[str] = Field(None, description="Дополнительные пояснения или контекст, если необходимы")
