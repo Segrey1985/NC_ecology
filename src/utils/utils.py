@@ -5,6 +5,15 @@ from io import BytesIO
 from typing import Optional
 from pdfminer.layout import LTTextBox, LTTextLine
 from pdfminer.high_level import extract_pages as extract_pages_miner
+from langchain_core.messages import (
+    HumanMessage,
+    SystemMessage,
+    AIMessage,
+    ToolMessage,
+    BaseMessage,
+)
+
+from src.utils.logger import logger
 
 # ___ PDF ___
 
@@ -216,6 +225,42 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
     finally:
         if not isinstance(input_pdf, bytes):
             input_pdf_file.close()
+
+
+# ___ langGraph ___
+
+def print_chunk(chunk):
+    for node_name, data in chunk.items():
+        
+        print(f"\n\n{'=' * 30} {node_name} {'=' * 30}")
+        print(f"Full response:\n{data}")
+
+        if not data:
+            continue
+            
+        if len(data["messages"]) > 1:
+            logger.warning(">>> Количество messages, которые вернула node больше 1!")
+            for message in data["messages"]:
+                print(message)
+            logger.warning("<<< Количество messages, которые вернула node больше 1!")
+        
+        message = data["messages"][0]
+        
+        if isinstance(message, AIMessage) and message.tool_calls:
+            
+            for tool_call in message.tool_calls:
+                print(f"tool_call name: {tool_call['name']}")
+                if tool_call["args"]:
+                    print("tool_calls ARGS:")
+                    for i, (k, v) in enumerate(tool_call["args"].items()):
+                        print(f"ARG[{i+1}] = {k}: {v}")
+                else:
+                    print("tool_calls ARGS: None")
+
+        if node_name == "tools":
+            print(f"tool name:\n{message.name}")
+
+        print(f"content:\n{message.content if message.content else "None"}")
 
 
 if __name__ == "__main__":

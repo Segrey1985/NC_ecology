@@ -107,11 +107,11 @@ if __name__ == "__main__":
     
     create_and_fill_collection(COLLECTION_NAME)
     
-    input_messages = [HumanMessage('Сведения о прочностных и деформационных характеристиках грунта в основании объекта капитального строительства')]
+    # input_messages = [HumanMessage('Сведения о прочностных и деформационных характеристиках грунта в основании объекта капитального строительства')]
+    input_messages = [HumanMessage('Тип бетона для фундамента')]
     
+    from src.utils.utils import print_chunk
     for chunk in graph.stream(
             {"messages": input_messages}, stream_mode="updates", config=config
     ):
-        print(chunk)
-        
-
+        print_chunk(chunk)
