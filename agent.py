@@ -25,6 +25,7 @@ from src.utils.logger import logger
 from config.config_file import cfg
 from config.langfuse_client import langfuse_config
 from src.models import LlmModel
+from src.utils.utils import print_chunk
 from src.pydantic_models import RelatedDisciplinesSearch
 from src.project_data.qdrant import QdrantService, collect_project_parts, build_qdrant_service
 from src.project_data.reranker import rerank_chunks
@@ -105,12 +106,9 @@ if __name__ == "__main__":
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
     
-    create_and_fill_collection(COLLECTION_NAME)
-    
     # input_messages = [HumanMessage('Сведения о прочностных и деформационных характеристиках грунта в основании объекта капитального строительства')]
     input_messages = [HumanMessage('Тип бетона для фундамента')]
     
-    from src.utils.utils import print_chunk
     for chunk in graph.stream(
             {"messages": input_messages}, stream_mode="updates", config=config
     ):
