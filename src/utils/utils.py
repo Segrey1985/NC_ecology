@@ -260,7 +260,7 @@ def print_chunk(chunk):
         if node_name == "tools":
             print(f"tool name:\n{message.name}")
 
-        print(f"content:\n{message.content if message.content else "None"}")
+        print(f"content:\n{message.content if message.content else 'None'}")
 
 
 if __name__ == "__main__":
