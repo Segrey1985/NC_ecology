@@ -10,14 +10,15 @@ def load_local_embedder(model_name: str):
     models_dir = cfg.BASE_DIR / "data" / "__local_models"
     model_name_str = model_name.replace("/", "_")
     model_path = models_dir / model_name_str
+    device = cfg.DEVICE
     if os.path.exists(model_path):
-        logger.debug(f"Loading local model from {model_path}...")
-        embedder = SentenceTransformer(model_path.as_posix(), device="cuda")
+        logger.debug(f"[embedder] Loading local model from {model_path}...")
+        embedder = SentenceTransformer(model_path.as_posix(), device=device)
     else:
-        logger.debug(f"Loading model from HuggingFace...")
-        embedder = SentenceTransformer(model_name, device="cuda")
+        logger.debug(f"[embedder] Loading model from HuggingFace...")
+        embedder = SentenceTransformer(model_name, device=device)
         embedder.save(model_path)  # внутри метода save есть makedirs(..., exist_ok=True)
-    logger.debug(f"Model loading complete.")
+    logger.debug(f"[embedder] Model loading complete.")
     return embedder
 
 

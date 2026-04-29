@@ -1,6 +1,10 @@
+from typing import Literal
+import torch
 import pathlib
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.utils.logger import logger
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 
@@ -32,6 +36,7 @@ class Config(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     RERANKER_MODEL: str = "qilowoq/bge-reranker-v2-m3-en-ru"
     USE_LANGFUSE: bool = True
+    DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
     
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
         "1": "ПЗ",
@@ -49,6 +54,9 @@ class Config(BaseSettings):
 
 
 cfg = Config()
+
+logger.info('\n\n\n\n\n---START----\n\n\n\n\n')
+logger.info(f"{cfg.DEVICE=}")
 
 if __name__ == "__main__":
     print(cfg)

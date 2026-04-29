@@ -1,7 +1,9 @@
+import os
 from numpy import ndarray
 from pathlib import Path
 from sentence_transformers import CrossEncoder
 
+from src.utils.logger import logger
 from config.config_file import cfg
 from src.project_data.qdrant import ProjectPart, QdrantService, QdrantClient
 
@@ -12,11 +14,30 @@ from src.project_data.qdrant import ProjectPart, QdrantService, QdrantClient
 # model_name = "qilowoq/bge-reranker-v2-m3-en-ru"
 
 
+def load_local_reranker(reranker_model: str):
+    models_dir = cfg.BASE_DIR / "data" / "__local_models"
+    model_name_str = reranker_model.replace("/", "_")
+    model_path = models_dir / model_name_str
+    device = cfg.DEVICE
+    if os.path.exists(model_path):
+        logger.debug(f"[reranker] Loading local model from {model_path}...")
+        reranker = CrossEncoder(model_path.as_posix(), device=device)
+    else:
+        logger.debug(f"[reranker] Loading model from HuggingFace...")
+        reranker = CrossEncoder(reranker_model, device=device)
+        reranker.save(model_path)  # внутри метода save есть makedirs(..., exist_ok=True)
+    logger.debug(f"[reranker] Model loading complete.")
+    return reranker
+
+
 def rerank_chunks(query: str, chunks: list[str]) -> list[str]:
-    model = CrossEncoder(cfg.RERANKER_MODEL)
+    model = load_local_reranker(cfg.RERANKER_MODEL)
+    print(model.device)
+    logger.debug(f"[reranker] Re-ranking start.")
     pairs = [(query, chunk) for chunk in chunks]
     scores: ndarray = model.predict(pairs)
     reranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
+    logger.debug(f"[reranker] Re-ranking complete.")
     return reranked
 
 
