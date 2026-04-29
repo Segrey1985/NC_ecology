@@ -16,7 +16,7 @@ def load_local_embedder(model_name: str):
     else:
         logger.debug(f"Loading model from HuggingFace...")
         embedder = SentenceTransformer(model_name, device="cuda")
-        embedder.save(model_path)
+        embedder.save(model_path)  # внутри метода save есть makedirs(..., exist_ok=True)
     logger.debug(f"Model loading complete.")
     return embedder
 
