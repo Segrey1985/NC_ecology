@@ -50,96 +50,94 @@ def create_and_fill_collection(collection_name: str) -> QdrantService:
     return qdrant_service
 
 
-COLLECTION_NAME = "main"
-qdrant_service = create_and_fill_collection(COLLECTION_NAME)
-llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
-
-
 class AgentState(MessagesState):
     input_query: str
 
 
-@tool(args_schema=RelatedDisciplinesSearch)
-def search_in_related_disciplines(query: str):
-    """Найти релевантные части текста в документах смежных разделов."""
-    relevant_points = qdrant_service.run_query(query, collection_name=COLLECTION_NAME, limit=30)
-    texts = [point.payload['text'] for point in relevant_points]
-    
-    reranked = rerank_chunks(query, texts)[0:5]
-    return reranked
+def build_graph(collection_name: str = "main"):
 
+    qdrant_service = create_and_fill_collection(collection_name)
+    llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
 
-tools_list = [search_in_related_disciplines]
-tool_node = ToolNode(tools_list)
-
-def agent_node(state: AgentState) -> AgentState:
-    system_message = SystemMessage(
-        "Ты помощник по поиску данных по строительному проекту. "
-        "Для поиска информации можешь пользоваться search_in_related_disciplines."
-    )
-    messages = [system_message] + state["messages"]
-    llm_with_tools = llm.bind_tools(tools_list)
-    response = llm_with_tools.invoke(messages)
-    if response.tool_calls:
-        logger.info(
-            f"LLM запросил {len(response.tool_calls)} инструментов: "
-            f"{[tc['name'] for tc in response.tool_calls]}"
+    @tool(args_schema=RelatedDisciplinesSearch)
+    def search_in_related_disciplines(query: str):
+        """Найти релевантные части текста в документах смежных разделов."""
+        relevant_points = qdrant_service.run_query(
+            query, collection_name=collection_name, limit=30
         )
-        
-    return {
-        "messages": [response],
-    }
+        texts = [point.payload["text"] for point in relevant_points]
 
+        reranked = rerank_chunks(query, texts)[0:5]
+        return reranked
 
-def structured_output_node(state: AgentState) -> AgentState:
-    system_message = SystemMessage(
-        "Верни ответ в формате:\n"
-        "- answer: краткий ответ на вопрос\n"
-        "- explanation: пояснение или обоснование из контекста (если есть)"
-    )
-    input_message = state["input_query"]
-    last_llm_message = 'Ответ отсутствует'
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, AIMessage):
-            last_llm_message = msg.content
-            break
-    
-    messages = [
-        system_message,
-        HumanMessage(
-            content=f"""
-            Запрос пользователя:
-            {input_message}
+    tools_list = [search_in_related_disciplines]
+    tool_node = ToolNode(tools_list)
 
-            Ответ модели:
-            {last_llm_message}
-            """
+    def agent_node(state: AgentState) -> AgentState:
+        system_message = SystemMessage(
+            "Ты помощник по поиску данных по строительному проекту. "
+            "Для поиска информации можешь пользоваться search_in_related_disciplines."
         )
-    ]
-    response = llm.with_structured_output(StructuredResponse).invoke(messages)
-    
-    return {
-        "messages": [AIMessage(content=response.model_dump_json())],
-    }
+        messages = [system_message] + state["messages"]
+        llm_with_tools = llm.bind_tools(tools_list)
+        response = llm_with_tools.invoke(messages)
+        if response.tool_calls:
+            logger.info(
+                f"LLM запросил {len(response.tool_calls)} инструментов: "
+                f"{[tc['name'] for tc in response.tool_calls]}"
+            )
 
+        return {
+            "messages": [response],
+        }
 
-builder = StateGraph(AgentState)
-builder.add_node("tools", tool_node)
-builder.add_node("agent_node", agent_node)
-builder.add_node("structured_output_node", structured_output_node)
-builder.add_edge(START, "agent_node")
-builder.add_conditional_edges(
-    "agent_node",
-    tools_condition,
-    {"tools": "tools", END: "structured_output_node"}
-)
-builder.add_edge("tools", "agent_node")
-builder.add_edge("structured_output_node", END)
+    def structured_output_node(state: AgentState) -> AgentState:
+        system_message = SystemMessage(
+            "Верни ответ в формате:\n"
+            "- answer: краткий ответ на вопрос\n"
+            "- explanation: пояснение или обоснование из контекста (если есть)"
+        )
+        input_message = state["input_query"]
+        last_llm_message = "Ответ отсутствует"
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, AIMessage):
+                last_llm_message = msg.content
+                break
 
-graph = builder.compile()
+        messages = [
+            system_message,
+            HumanMessage(
+                content=f"""
+                Запрос пользователя:
+                {input_message}
+
+                Ответ модели:
+                {last_llm_message}
+                """
+            ),
+        ]
+        response = llm.with_structured_output(StructuredResponse).invoke(messages)
+
+        return {
+            "messages": [AIMessage(content=response.model_dump_json())],
+        }
+
+    builder = StateGraph(AgentState)
+    builder.add_node("tools", tool_node)
+    builder.add_node("agent_node", agent_node)
+    builder.add_node("structured_output_node", structured_output_node)
+    builder.add_edge(START, "agent_node")
+    builder.add_conditional_edges(
+        "agent_node", tools_condition, {"tools": "tools", END: "structured_output_node"}
+    )
+    builder.add_edge("tools", "agent_node")
+    builder.add_edge("structured_output_node", END)
+
+    return builder.compile()
 
 
 if __name__ == "__main__":
+    graph = build_graph()
     
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)

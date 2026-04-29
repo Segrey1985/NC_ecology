@@ -4,7 +4,7 @@ from pprint import pprint
 from pathlib import Path
 from langchain_core.messages import HumanMessage
 
-from agent import graph
+from agent import build_graph
 from config.langfuse_client import langfuse_config
 from src.utils.utils import print_chunk
 from src.templates.template_engine import fill_template
@@ -34,7 +34,7 @@ def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | 
     return placeholders, table_placeholders
 
 
-def _run_graph(detailed_placeholder, verbose=True) -> str:
+def _run_graph(graph, detailed_placeholder, verbose: bool = True) -> str:
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
@@ -66,14 +66,17 @@ def main(
     table_placeholders_path: Path | None,
     project_parts_path: Path | None,
     output_path: Path,
+    collection_name: str = "main",
 ):
     placeholders, table_placeholders = _load_placeholders(
         placeholders_path, table_placeholders_path
     )
 
+    graph = build_graph(collection_name=collection_name)
+
     placeholders_output = {}
     for placeholder, detailed_placeholder in placeholders.items():
-        final_content = _run_graph(detailed_placeholder, verbose=True)
+        final_content = _run_graph(graph, detailed_placeholder, verbose=True)
         placeholders_output[placeholder] = json.loads(final_content).get("answer", "__empty__")
         break
 
@@ -110,4 +113,5 @@ if __name__ == "__main__":
         table_placeholders_path=None,
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
+        collection_name="main",
     )
