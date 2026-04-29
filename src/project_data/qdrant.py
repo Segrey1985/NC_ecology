@@ -15,7 +15,7 @@ from src.utils.utils import extract_text_with_miner_coords
 from src.project_data.embeddings import load_local_embedder, init_openai_embedder
 
 if cfg.EMBEDDINGS_LOCAL:
-    embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_PATH)
+    embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_NAME)
 else:
     embedder = init_openai_embedder()
 
@@ -59,7 +59,7 @@ class QdrantService:
 
 def build_qdrant_service() -> QdrantService:
     """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
-    client = QdrantClient(url="http://localhost:6333")
+    client = QdrantClient(url=cfg.QDRANT_URL)
     return QdrantService(client=client, model=embedder)
 
 
