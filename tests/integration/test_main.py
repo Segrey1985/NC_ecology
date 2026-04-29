@@ -14,6 +14,7 @@ def test_main():
             project_parts_path=None,
             output_path=output_dir,
             collection_name="main",
+            test_mode=True,
         )
 
         created_files = [p for p in output_dir.rglob("*") if p.is_file()]

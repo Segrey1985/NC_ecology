@@ -67,6 +67,8 @@ def main(
     project_parts_path: Path | None,
     output_path: Path,
     collection_name: str = "main",
+    verbose: bool = True,
+    test_mode: bool = False,
 ):
     placeholders, table_placeholders = _load_placeholders(
         placeholders_path, table_placeholders_path
@@ -76,9 +78,10 @@ def main(
 
     placeholders_output = {}
     for placeholder, detailed_placeholder in placeholders.items():
-        final_content = _run_graph(graph, detailed_placeholder, verbose=True)
+        final_content = _run_graph(graph, detailed_placeholder, verbose=verbose)
         placeholders_output[placeholder] = json.loads(final_content).get("answer", "__empty__")
-        break
+        if test_mode:
+            break
 
     ## mock
     # placeholders_output = json.load(
