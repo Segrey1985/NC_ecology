@@ -18,4 +18,4 @@ RUN python -m pip install --upgrade pip \
 
 COPY . /app
 
-CMD ["python", "main.py"]
+CMD ["python", "api.py"]
