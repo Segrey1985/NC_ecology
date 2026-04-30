@@ -34,12 +34,12 @@ def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | 
     return placeholders, table_placeholders
 
 
-def _run_graph(graph, detailed_placeholder, verbose: bool = True) -> str:
+def _run_graph(graph, placeholder_for_rag, verbose: bool = True) -> str:
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
 
-    input_messages = [HumanMessage(detailed_placeholder)]
+    input_messages = [HumanMessage(placeholder_for_rag)]
 
     final_content = ""
     for chunk in graph.stream(
@@ -77,8 +77,9 @@ def main(
     graph = build_graph(collection_name=collection_name)
 
     placeholders_output = {}
-    for placeholder, detailed_placeholder in placeholders.items():
-        final_content = _run_graph(graph, detailed_placeholder, verbose=verbose)
+    for placeholder, placeholder_info in placeholders.items():
+        placeholder_for_rag = placeholder_info["for_rag_search"]
+        final_content = _run_graph(graph, placeholder_for_rag, verbose=verbose)
         placeholders_output[placeholder] = json.loads(final_content).get("answer", "__empty__")
         if test_mode:
             break
@@ -117,4 +118,5 @@ if __name__ == "__main__":
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main",
+        test_mode=True,
     )
