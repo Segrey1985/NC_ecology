@@ -54,11 +54,18 @@ class AgentState(MessagesState):
 # --- Вспомогательные функции ---
 
 
-def create_and_fill_collection(collection_name: str) -> QdrantService:
+def create_and_fill_collection(
+    collection_name: str, project_parts_path: Path | None
+) -> QdrantService:
     qdrant_service = build_qdrant_service()
     if not qdrant_service.client.collection_exists(collection_name):
-
-        project_parts = collect_project_parts(Path("data/IN/project1/trim"))
+        if not project_parts_path:
+            raise ValueError(
+                f"Коллекция {collection_name} не существует. "
+                f"Требуется создание коллекции из project_parts_path. "
+                f"Аргумент project_parts_path не передан."
+            )
+        project_parts = collect_project_parts(project_parts_path)
 
         for project_part in project_parts:
             project_part.run()
@@ -146,13 +153,15 @@ def structured_output_node(state: AgentState) -> AgentState:
 # --- Инициализация графа ---
 
 
-def init_graph(collection_name: str = "main"):
+def init_graph(collection_name: str, project_parts_path: Path | None):
     """
     Инициализирует параметры и собирает граф.
     """
     # Обновляем глобальные параметры
     PARAMS.collection_name = collection_name
-    PARAMS.qdrant_service = create_and_fill_collection(collection_name)
+    PARAMS.qdrant_service = create_and_fill_collection(
+        collection_name, project_parts_path=project_parts_path
+    )
     PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
 
     builder = StateGraph(AgentState)
@@ -171,7 +180,9 @@ def init_graph(collection_name: str = "main"):
 
 if __name__ == "__main__":
 
-    graph = init_graph(collection_name="main")
+    graph = init_graph(
+        collection_name="main", project_parts_path=Path("data/IN/project1/trim")
+    )
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)

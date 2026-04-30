@@ -74,7 +74,7 @@ def main(
         placeholders_path, table_placeholders_path
     )
 
-    graph = init_graph(collection_name=collection_name)
+    graph = init_graph(collection_name=collection_name, project_parts_path=project_parts_path)
 
     placeholders_output = {}
     for placeholder, placeholder_info in placeholders.items():
