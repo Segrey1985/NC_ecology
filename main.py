@@ -4,7 +4,7 @@ from pprint import pprint
 from pathlib import Path
 from langchain_core.messages import HumanMessage
 
-from agent import build_graph
+from agent import init_graph
 from config.langfuse_client import langfuse_config
 from src.utils.utils import print_chunk
 from src.templates.template_engine import fill_template
@@ -74,13 +74,15 @@ def main(
         placeholders_path, table_placeholders_path
     )
 
-    graph = build_graph(collection_name=collection_name)
+    graph = init_graph(collection_name=collection_name)
 
     placeholders_output = {}
     for placeholder, placeholder_info in placeholders.items():
         placeholder_for_rag = placeholder_info["for_rag_search"]
         final_content = _run_graph(graph, placeholder_for_rag, verbose=verbose)
-        placeholders_output[placeholder] = json.loads(final_content).get("answer", "__empty__")
+        placeholders_output[placeholder] = json.loads(final_content).get(
+            "answer", "__empty__"
+        )
         if test_mode:
             break
 
@@ -112,7 +114,11 @@ if __name__ == "__main__":
 
     base = Path(__file__).parent
     main(
-        template_docx_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.docx",
+        template_docx_path=base
+        / "data"
+        / "IN"
+        / "templates"
+        / "Анализ_и_введение.docx",
         placeholders_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.json",
         table_placeholders_path=None,
         project_parts_path=None,

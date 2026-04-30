@@ -13,7 +13,7 @@ def test_main():
             table_placeholders_path=None,
             project_parts_path=None,
             output_path=output_dir,
-            collection_name="main",
+            collection_name="test_data",
             test_mode=True,
         )
 
