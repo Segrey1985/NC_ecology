@@ -53,9 +53,9 @@ def _run_graph(graph, placeholder_for_rag, verbose: bool = True) -> str:
         if verbose:
             print_chunk(chunk)
 
-        if "structured_output_node" in chunk:
-            final_output = chunk["structured_output_node"]
-            final_content = final_output["messages"][-1].content
+        if "answer_node" in chunk:
+            final_output = chunk["answer_node"]
+            final_content = final_output["answer"]
 
     return final_content
 
@@ -124,5 +124,5 @@ if __name__ == "__main__":
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main",
-        test_mode=True,
+        test_mode=False,
     )

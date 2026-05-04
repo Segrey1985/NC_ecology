@@ -238,29 +238,40 @@ def print_chunk(chunk):
         if not data:
             continue
             
-        if len(data["messages"]) > 1:
-            logger.warning(">>> Количество messages, которые вернула node больше 1!")
-            for message in data["messages"]:
-                print(message)
-            logger.warning("<<< Количество messages, которые вернула node больше 1!")
+        # state['answer'], state['something'] ...
         
-        message = data["messages"][0]
+        ignore_keys = ["rag_context"]
+        fields_without_messages = {k: v for k, v in data.items() if k != "messages"}
+        for key, value in fields_without_messages.items():
+            if key not in ignore_keys:
+                print(f"{key}:\n{value if value else 'None'}")
+            else:
+                print(f"{key}: ...")
+                
+        # state['messages']
         
-        if isinstance(message, AIMessage) and message.tool_calls:
-            
-            for tool_call in message.tool_calls:
-                print(f"tool_call name: {tool_call['name']}")
-                if tool_call["args"]:
-                    print("tool_calls ARGS:")
-                    for i, (k, v) in enumerate(tool_call["args"].items()):
-                        print(f"ARG[{i+1}] = {k}: {v}")
-                else:
-                    print("tool_calls ARGS: None")
+        messages = data.get("messages", [])
+        
+        if len(messages) > 1:
+            logger.warning("!!! Количество messages, которые вернула node больше 1 !!!")
+        
+        for message in messages:
 
-        if node_name == "tools":
-            print(f"tool name:\n{message.name}")
-
-        print(f"content:\n{message.content if message.content else 'None'}")
+            if isinstance(message, AIMessage) and message.tool_calls:
+                
+                for tool_call in message.tool_calls:
+                    print(f"tool_call name: {tool_call['name']}")
+                    if tool_call["args"]:
+                        print("tool_calls ARGS:")
+                        for i, (k, v) in enumerate(tool_call["args"].items()):
+                            print(f"ARG[{i+1}] = {k}: {v}")
+                    else:
+                        print("tool_calls ARGS: None")
+    
+            if node_name == "tools":
+                print(f"tool name:\n{message.name}")
+    
+            print(f"content:\n{message.content if message.content else 'None'}")
 
 
 if __name__ == "__main__":

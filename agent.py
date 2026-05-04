@@ -1,32 +1,21 @@
 import uuid
-import json
 from pathlib import Path
-from operator import add
-from typing import Optional, Annotated
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal, Optional
 
-import sqlite3
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.checkpoint.memory import InMemorySaver
-
-from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_core.tools import tool, BaseTool
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
     AIMessage,
-    ToolMessage,
-    BaseMessage,
-    RemoveMessage,
 )
+from pydantic import BaseModel, Field
 
 from src.utils.logger import logger
 from config.config_file import cfg
 from config.langfuse_client import langfuse_config
 from src.models import LlmModel
 from src.utils.utils import print_chunk
-from src.pydantic_models import RelatedDisciplinesSearch, StructuredResponse
+from src.pydantic_models import StructuredResponse
 from src.project_data.qdrant import (
     QdrantService,
     collect_project_parts,
@@ -48,7 +37,25 @@ PARAMS = GraphParams()  # глобальный объект параметров
 
 
 class AgentState(MessagesState):
+    # input
     input_query: str
+    
+    # rag
+    rag_query: str
+    rag_context: str
+    
+    # agent_node
+    answer: str
+    
+    # check_node
+    check_decision: Literal["OK", "REWRITE"]
+    check_reason: str
+    
+    # rewrite_node
+    rewrite_count: int
+
+
+
 
 
 # --- Вспомогательные функции ---
@@ -83,71 +90,140 @@ def create_and_fill_collection(
 # --- Tools ---
 
 
-@tool(args_schema=RelatedDisciplinesSearch)
-def search_in_related_disciplines(query: str):
+def search_in_related_disciplines(query: str) -> list[str]:
     """Найти релевантные части текста в документах смежных разделов."""
-
     qdrant_service = PARAMS.qdrant_service
     collection_name = PARAMS.collection_name
+    if qdrant_service is None or collection_name is None:
+        raise RuntimeError("Qdrant не инициализирован. Сначала вызовите init_graph().")
 
     relevant_points = qdrant_service.run_query(
         query, collection_name=collection_name, limit=30
     )
     texts = [point.payload["text"] for point in relevant_points]
     reranked = rerank_chunks(query, texts)[0:5]
-    return reranked
+    return [chunk for chunk, _score in reranked]
 
 
-tools_list = [search_in_related_disciplines]
+def format_rag_context(chunks: list[str]) -> str:
+    if not chunks:
+        return "Релевантный контекст не найден."
+    return "\n\n".join(f"[{idx}] {chunk}" for idx, chunk in enumerate(chunks, start=1))
 
 
 # --- Nodes ---
 
 
-def agent_node(state: AgentState) -> AgentState:
+def rag_search_node(state: AgentState) -> AgentState:
+    rag_query = state.get("rag_query") or state["input_query"]
+    chunks = search_in_related_disciplines(rag_query)
+    rag_context = format_rag_context(chunks)
+    logger.info(f"RAG search completed for query: {rag_query}")
+    return {
+        "rag_query": rag_query,
+        "rag_context": rag_context,
+    }
+
+
+def answer_node(state: AgentState) -> AgentState:
     llm = PARAMS.llm
     system_message = SystemMessage(
         "Ты помощник по поиску данных по строительному проекту. "
-        "Для поиска информации можешь пользоваться search_in_related_disciplines."
+        "Отвечай только на основе переданного RAG-контекста. "
+        "Если в контексте нет данных для уверенного ответа, так и укажи."
     )
-    messages = [system_message] + state["messages"]
-    llm_with_tools = llm.bind_tools(tools_list)
-    response = llm_with_tools.invoke(messages)
-    if response.tool_calls:
-        logger.info(
-            f"LLM запросил {len(response.tool_calls)} инструментов: "
-            f"{[tc['name'] for tc in response.tool_calls]}"
-        )
-
-    return {"messages": [response]}
-
-
-def structured_output_node(state: AgentState) -> AgentState:
-    llm = PARAMS.llm
-    system_message = SystemMessage(
-        "Верни ответ в формате:\n"
-        "- answer: краткий ответ на вопрос\n"
-        "- explanation: пояснение или обоснование из контекста (если есть)"
-    )
-    input_message = state["input_query"]
-    last_llm_message = "Ответ отсутствует"
-
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, AIMessage):
-            last_llm_message = msg.content
-            break
-
     messages = [
         system_message,
         HumanMessage(
-            content=f"Запрос пользователя:\n{input_message}\n\nОтвет модели:\n{last_llm_message}"
+            content=(
+                f"Запрос пользователя:\n{state['input_query']}\n\n"
+                f"RAG-запрос:\n{state['rag_query']}\n\n"
+                f"RAG-контекст:\n{state['rag_context']}"
+            )
         ),
     ]
     response = llm.with_structured_output(StructuredResponse).invoke(messages)
+    response_json = response.model_dump_json()
 
     return {
-        "messages": [AIMessage(content=response.model_dump_json())],
+        "answer": response_json,
+        "messages": [AIMessage(content=response_json)],
     }
+
+
+class AnswerCheck(BaseModel):
+    decision: Literal["OK", "REWRITE"] = Field(
+        ...,
+        description="OK, если ответ достаточно обоснован контекстом; иначе REWRITE.",
+    )
+    reason: str = Field(..., description="Краткая причина решения.")
+    rewrite_focus: Optional[str] = Field(
+        None,
+        description="Что нужно уточнить при переписывании RAG-запроса.",
+    )
+
+
+def check_node(state: AgentState) -> AgentState:
+    llm = PARAMS.llm
+    system_message = SystemMessage(
+        "Проверь, отвечает ли ответ на запрос пользователя и достаточно ли он "
+        "подтвержден RAG-контекстом. Верни OK, если ответ можно использовать. "
+        "Верни REWRITE, если нужен более точный RAG-запрос."
+    )
+    messages = [
+        system_message,
+        HumanMessage(
+            content=(
+                f"Запрос пользователя:\n{state['input_query']}\n\n"
+                f"RAG-запрос:\n{state['rag_query']}\n\n"
+                f"RAG-контекст:\n{state['rag_context']}\n\n"
+                f"Ответ:\n{state['answer']}"
+            )
+        ),
+    ]
+    check = llm.with_structured_output(AnswerCheck).invoke(messages)
+
+    return {
+        "check_decision": check.decision,
+        "check_reason": check.reason,
+    }
+
+
+def rewrite_query_node(state: AgentState) -> AgentState:
+    llm = PARAMS.llm
+    system_message = SystemMessage(
+        "Перепиши запрос для RAG-поиска так, чтобы следующий поиск нашел "
+        "контекст, которого не хватило для ответа. Верни только текст запроса."
+    )
+    messages = [
+        system_message,
+        HumanMessage(
+            content=(
+                f"Исходный запрос пользователя:\n{state['input_query']}\n\n"
+                f"Предыдущий RAG-запрос:\n{state['rag_query']}\n\n"
+                f"Причина повторного поиска:\n{state['check_reason']}\n\n"
+                f"Предыдущий ответ:\n{state['answer']}"
+            )
+        ),
+    ]
+    response = llm.invoke(messages)
+    rewritten_query = str(response.content).strip() or state["input_query"]
+    logger.info(f"RAG query rewritten: {rewritten_query}")
+
+    return {
+        "rag_query": rewritten_query,
+        "rewrite_count": state.get("rewrite_count", 0) + 1,
+    }
+
+
+def route_after_check(state: AgentState) -> str:
+    MAX_REWRITES = 2
+    if (
+        state.get("check_decision") == "REWRITE"
+        and state.get("rewrite_count", 0) < MAX_REWRITES
+    ):
+        return "rewrite_query_node"
+    return END
 
 
 # --- Инициализация графа ---
@@ -165,15 +241,19 @@ def init_graph(collection_name: str, project_parts_path: Path | None):
     PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
 
     builder = StateGraph(AgentState)
-    builder.add_node("tools", ToolNode(tools_list))
-    builder.add_node("agent_node", agent_node)
-    builder.add_node("structured_output_node", structured_output_node)
-    builder.add_edge(START, "agent_node")
+    builder.add_node("rag_search_node", rag_search_node)
+    builder.add_node("answer_node", answer_node)
+    builder.add_node("check_node", check_node)
+    builder.add_node("rewrite_query_node", rewrite_query_node)
+    builder.add_edge(START, "rag_search_node")
+    builder.add_edge("rag_search_node", "answer_node")
+    builder.add_edge("answer_node", "check_node")
     builder.add_conditional_edges(
-        "agent_node", tools_condition, {"tools": "tools", END: "structured_output_node"}
+        "check_node",
+        route_after_check,
+        {"rewrite_query_node": "rewrite_query_node", END: END},
     )
-    builder.add_edge("tools", "agent_node")
-    builder.add_edge("structured_output_node", END)
+    builder.add_edge("rewrite_query_node", "rag_search_node")
 
     return builder.compile()
 
