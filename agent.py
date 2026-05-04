@@ -45,6 +45,7 @@ class AgentState(MessagesState):
     rag_context: str
     
     # agent_node
+    input_for_agent_prompt: str
     answer: str
     
     # check_node
@@ -131,13 +132,16 @@ def answer_node(state: AgentState) -> AgentState:
         "Ты помощник по поиску данных по строительному проекту. "
         "Отвечай только на основе переданного RAG-контекста. "
         "Если в контексте нет данных для уверенного ответа, так и укажи."
+        "Правила:\n"
+        "1. Запрещено повторять вопрос в ответе.\n"
+        "2. Запрещено использовать вводные конструкции (например, 'Согласно документу...', 'Основанием является...').\n"
+        "3. Выводи только конкретный факт или фрагмент текста."
     )
     messages = [
         system_message,
         HumanMessage(
             content=(
-                f"Запрос пользователя:\n{state['input_query']}\n\n"
-                f"RAG-запрос:\n{state['rag_query']}\n\n"
+                f"Запрос пользователя:\n{state['input_for_agent_prompt']}\n\n"
                 f"RAG-контекст:\n{state['rag_context']}"
             )
         ),
@@ -168,14 +172,14 @@ def check_node(state: AgentState) -> AgentState:
     system_message = SystemMessage(
         "Проверь, отвечает ли ответ на запрос пользователя и достаточно ли он "
         "подтвержден RAG-контекстом. Верни OK, если ответ можно использовать. "
-        "Верни REWRITE, если нужен более точный RAG-запрос."
+        "Верни REWRITE, если нужен более точный RAG-запрос "
+        "или если было найдено недостаточно данных для корректного ответа."
     )
     messages = [
         system_message,
         HumanMessage(
             content=(
-                f"Запрос пользователя:\n{state['input_query']}\n\n"
-                f"RAG-запрос:\n{state['rag_query']}\n\n"
+                f"Запрос пользователя:\n{state['input_for_agent_prompt']}\n\n"
                 f"RAG-контекст:\n{state['rag_context']}\n\n"
                 f"Ответ:\n{state['answer']}"
             )

@@ -1,4 +1,3 @@
-from argparse import ArgumentParser
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -19,5 +18,11 @@ class RelatedDisciplinesSearch(BaseModel):
 
 
 class StructuredResponse(BaseModel):
-    answer: str = Field(..., description="Краткий, точный (но полный) ответ на запрос пользователя")
-    explanation: Optional[str] = Field(None, description="Дополнительные пояснения или контекст, если необходимы")
+    answer: str = Field(
+        ...,
+        description="Краткий, точный (но полный) ответ на запрос пользователя. "
+        "Любые вводные слова и повторение сути вопроса запрещены.",
+    )
+    explanation: Optional[str] = Field(
+        None, description="Дополнительные пояснения или контекст, если необходимы"
+    )

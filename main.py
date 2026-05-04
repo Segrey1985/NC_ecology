@@ -34,18 +34,19 @@ def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | 
     return placeholders, table_placeholders
 
 
-def _run_graph(graph, placeholder_for_rag, verbose: bool = True) -> str:
+def _run_graph(
+    graph, input_for_rag_search, input_for_agent_prompt, verbose: bool = True
+) -> str:
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
 
-    input_messages = [HumanMessage(placeholder_for_rag)]
-
     final_content = ""
     for chunk in graph.stream(
         input={
-            "messages": input_messages,
-            "input_query": input_messages[0].content,
+            "messages": [HumanMessage(input_for_rag_search)],
+            "input_query": input_for_rag_search,
+            "input_for_agent_prompt": input_for_agent_prompt
         },
         stream_mode="updates",
         config=config,
@@ -74,12 +75,17 @@ def main(
         placeholders_path, table_placeholders_path
     )
 
-    graph = init_graph(collection_name=collection_name, project_parts_path=project_parts_path)
+    graph = init_graph(
+        collection_name=collection_name, project_parts_path=project_parts_path
+    )
 
     placeholders_output = {}
     for placeholder, placeholder_info in placeholders.items():
-        placeholder_for_rag = placeholder_info["for_rag_search"]
-        final_content = _run_graph(graph, placeholder_for_rag, verbose=verbose)
+        input_for_rag_search = placeholder_info["for_rag_search"]
+        input_for_agent_prompt = placeholder_info["for_agent_prompt"]
+        final_content = _run_graph(
+            graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
+        )
         placeholders_output[placeholder] = json.loads(final_content).get(
             "answer", "__empty__"
         )
