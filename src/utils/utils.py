@@ -278,14 +278,22 @@ if __name__ == "__main__":
 
     # найти номер страницы файла, где заголовком будет text
 
-    # text = "АННОТАЦИЯ"
-    # print(
-    #     find_page_index_by_first_text(
-    #         r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\trim\ОК.02.24 СТ-ООС.pdf",
-    #         text=text
-    #     )
-    # )
-
+    # text = "ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ"
+    # for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
+    #     print(page := find_page_index_by_first_text(f, text=text))
+    #
+    #     # здесь уже обрезаем и сохраняем (можно закомментить)
+    #
+    #     if page is not None:
+    #         bytes_ = extract_pages(f, pages_to_keep=list(range(page+1, page+1+8)))
+    #         pth = pathlib.Path(f)
+    #         new_name = pth.parent / "chapter1" /pth.name
+    #         new_name.parent.mkdir(parents=True, exist_ok=True)
+    #         with open(new_name, "wb") as new_file:
+    #             new_file.write(bytes_)
+    #     else:
+    #         print(f)
+        
     # обрезать исходные pdf
     #
     # for f in glob.glob(r"../../data/IN/project1/*.pdf"):
