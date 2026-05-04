@@ -3,6 +3,7 @@ services:
     image: qdrant/qdrant:latest
     volumes:
       - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
   app:
     image: ecology-app-cuda
@@ -19,6 +20,7 @@ services:
     ports:
       - "8000:8000"
     gpus: all
+    restart: unless-stopped
 
 volumes:
   qdrant_data:
