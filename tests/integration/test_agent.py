@@ -12,7 +12,6 @@ def test_agent():
     input_for_agent_prompt = 'Краткое описание проектируемых электросетей и их параметров'
     for chunk in graph.stream(
         input={
-            "messages": [HumanMessage(input_query)],
             "input_query": input_query,
             "input_for_agent_prompt": input_for_agent_prompt
         },

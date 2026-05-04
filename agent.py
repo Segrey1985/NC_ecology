@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, TypedDict
 
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langchain_core.messages import (
@@ -36,7 +36,7 @@ class GraphParams:
 PARAMS = GraphParams()  # глобальный объект параметров
 
 
-class AgentState(MessagesState):
+class AgentState(TypedDict):
     # input
     input_query: str
     
@@ -54,9 +54,6 @@ class AgentState(MessagesState):
     
     # rewrite_node
     rewrite_count: int
-
-
-
 
 
 # --- Вспомогательные функции ---
@@ -151,7 +148,6 @@ def answer_node(state: AgentState) -> AgentState:
 
     return {
         "answer": response_json,
-        "messages": [AIMessage(content=response_json)],
     }
 
 
@@ -271,13 +267,13 @@ if __name__ == "__main__":
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
 
-    input_query = "Проектируемые электросети"
-    input_messages = [HumanMessage(input_query)]
+    input_query = 'Проектируемые электросети'
+    input_for_agent_prompt = 'Краткое описание проектируемых электросетей и их параметров'
 
     for chunk in graph.stream(
         input={
-            "messages": input_messages,
             "input_query": input_query,
+            "input_for_agent_prompt": input_for_agent_prompt
         },
         stream_mode="updates",
         config=config,

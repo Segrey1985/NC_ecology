@@ -44,7 +44,6 @@ def _run_graph(
     final_content = ""
     for chunk in graph.stream(
         input={
-            "messages": [HumanMessage(input_for_rag_search)],
             "input_query": input_for_rag_search,
             "input_for_agent_prompt": input_for_agent_prompt
         },
