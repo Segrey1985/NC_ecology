@@ -22,7 +22,7 @@ def health():
 @app.post("/generate")
 async def generate(
     placeholders: UploadFile = File(..., description="JSON с плейсхолдерами"),
-    template_docx: UploadFile | None = File(..., description="DOCX шаблон"),
+    template_docx: UploadFile = File(..., description="DOCX шаблон"),
     table_placeholders: UploadFile | None = File(
         None, description="JSON с табличными плейсхолдерами (опционально)"
     ),
