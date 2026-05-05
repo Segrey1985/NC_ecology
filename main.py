@@ -4,9 +4,10 @@ from pprint import pprint
 from pathlib import Path
 from langchain_core.messages import HumanMessage
 
-from agent import init_graph
+from agent import init_graph, PARAMS
 from config.langfuse_client import langfuse_config
-from src.utils.utils import print_chunk
+from src.utils.logger import logger
+from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.template_engine import fill_template
 
 __placeholders_example = {
@@ -96,13 +97,22 @@ def main(
         if test_mode:
             break
 
-    ## mock
+    # # mock
     # placeholders_output = json.load(
     #     open(
     #         "data/mock/placeholders_output.json",
     #         encoding="utf-8",
     #     )
     # )
+
+    qdrant_service = PARAMS.qdrant_service
+    if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
+        collection_name
+    ):
+        qdrant_service.client.delete_collection(collection_name)
+        logger.info(
+            f"collection <{collection_name}> name is valid uuid and was deleted"
+        )
 
     if output_path:
         output_path.mkdir(parents=True, exist_ok=True)

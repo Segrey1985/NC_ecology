@@ -1,3 +1,4 @@
+import re
 import glob
 import pypdf
 import pathlib
@@ -14,6 +15,15 @@ from langchain_core.messages import (
 )
 
 from src.utils.logger import logger
+
+# ___ ALL UTILS ___
+
+UUID4_HEX_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+
+
+def is_valid_uuid4_hex(value: str) -> bool:
+    return bool(UUID4_HEX_PATTERN.fullmatch(value))
+
 
 # ___ PDF ___
 
