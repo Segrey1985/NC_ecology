@@ -26,7 +26,9 @@ async def validate_zip(file: UploadFile):
     await file.seek(0)
 
     if not data:
-        raise HTTPException(status_code=400, detail=f"{file.filename}: пустой ZIP-архив")
+        raise HTTPException(
+            status_code=400, detail=f"{file.filename}: пустой ZIP-архив"
+        )
 
     # Страховка от случайных гигантских загрузок/zip-bomb.
     # Если потребуется — вынесем лимиты в конфиг.
@@ -116,7 +118,8 @@ async def validate_zip(file: UploadFile):
         raise
     except zipfile.BadZipFile as e:
         raise HTTPException(
-            status_code=400, detail=f"{file.filename} не является корректным ZIP-архивом"
+            status_code=400,
+            detail=f"{file.filename} не является корректным ZIP-архивом",
         ) from e
     except Exception as e:
         raise HTTPException(
@@ -128,19 +131,21 @@ async def validate_zip(file: UploadFile):
 async def validate_pdf(file: UploadFile):
     header = await file.read(5)
     await file.seek(0)
-    
+
     if not (
         file.content_type == "application/pdf"
         or Path(file.filename).suffix.lower() == ".pdf"
         or header == b"%PDF-"
     ):
-        raise HTTPException(status_code=400, detail=f"{file.filename} is not a valid PDF")
-    
-    
+        raise HTTPException(
+            status_code=400, detail=f"{file.filename} is not a valid PDF"
+        )
+
+
 async def validate_docx(file: UploadFile):
     header = await file.read(2)
     await file.seek(0)
-    
+
     if not (
         file.content_type
         == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -148,7 +153,7 @@ async def validate_docx(file: UploadFile):
         or header == b"PK"
     ):
         raise HTTPException(status_code=400, detail="template_docx must be DOCX")
-    
+
 
 async def validate_json(file: UploadFile):
     try:
@@ -156,4 +161,6 @@ async def validate_json(file: UploadFile):
         await file.seek(0)
         json.loads(content)
     except Exception:
-        raise HTTPException(status_code=400, detail=f"{file.filename} is not valid JSON")
+        raise HTTPException(
+            status_code=400, detail=f"{file.filename} is not valid JSON"
+        )

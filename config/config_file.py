@@ -27,8 +27,8 @@ class Config(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-    
-    MODEL_NAME: str = models['flash']
+
+    MODEL_NAME: str = models["flash"]
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
@@ -37,7 +37,7 @@ class Config(BaseSettings):
     RERANKER_MODEL: str = "qilowoq/bge-reranker-v2-m3-en-ru"
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
-    
+
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
         "1": "ПЗ",
         "2": "ПЗУ",
@@ -55,7 +55,7 @@ class Config(BaseSettings):
 
 cfg = Config()
 
-logger.info('\n\n\n\n\n---START----\n\n\n\n\n')
+logger.info("\n\n\n\n\n---START----\n\n\n\n\n")
 logger.info(f"{cfg.DEVICE=}")
 
 if __name__ == "__main__":

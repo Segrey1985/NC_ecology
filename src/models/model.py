@@ -30,5 +30,5 @@ if __name__ == "__main__":
     # llm_model = LlmModel(model_type="ollama", model_name="qwen3.5:35b").create()
     # print(llm_model.invoke("Привет"))
 
-    llm_model = LlmModel(model_type="ai_tunnel", model_name='gpt-5-nano').create()
+    llm_model = LlmModel(model_type="ai_tunnel", model_name="gpt-5-nano").create()
     print(llm_model.invoke("Привет"))

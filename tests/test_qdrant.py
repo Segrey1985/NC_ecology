@@ -9,11 +9,11 @@ def test_qdrant_service():
         )
     )
     project_part.run()
-    
+
     qdrant_service = build_qdrant_service()
     COLLECTION_NAME = "test_data"
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
-    
+
     qdrant_service.add_points_to_collection(
         collection_name=COLLECTION_NAME,
         points=project_part.points,
@@ -52,7 +52,7 @@ def test_run_query():
         )
     )
     project_part.run()
-    
+
     qdrant_service = build_qdrant_service()
     COLLECTION_NAME = "test_data"
     if qdrant_service.client.collection_exists(COLLECTION_NAME):
@@ -62,7 +62,9 @@ def test_run_query():
         collection_name=COLLECTION_NAME,
         points=project_part.points,
     )
-    result = qdrant_service.run_query(query='Адрес объекта', collection_name=COLLECTION_NAME, limit=5)
+    result = qdrant_service.run_query(
+        query="Адрес объекта", collection_name=COLLECTION_NAME, limit=5
+    )
     for r in result:
         print(r)
         print()

@@ -229,17 +229,18 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
 
 # ___ langGraph ___
 
+
 def print_chunk(chunk):
     for node_name, data in chunk.items():
-        
+
         print(f"\n\n{'=' * 30} {node_name} {'=' * 30}")
         print(f"Full response:\n{data}")
 
         if not data:
             continue
-            
+
         # state['answer'], state['something'] ...
-        
+
         ignore_keys = ["rag_context"]
         fields_without_messages = {k: v for k, v in data.items() if k != "messages"}
         for key, value in fields_without_messages.items():
@@ -247,18 +248,18 @@ def print_chunk(chunk):
                 print(f"{key}:\n{value if value else 'None'}")
             else:
                 print(f"{key}: ...")
-                
+
         # state['messages']
-        
+
         messages = data.get("messages", [])
-        
+
         if len(messages) > 1:
             logger.warning("!!! Количество messages, которые вернула node больше 1 !!!")
-        
+
         for message in messages:
 
             if isinstance(message, AIMessage) and message.tool_calls:
-                
+
                 for tool_call in message.tool_calls:
                     print(f"tool_call name: {tool_call['name']}")
                     if tool_call["args"]:
@@ -267,10 +268,10 @@ def print_chunk(chunk):
                             print(f"ARG[{i+1}] = {k}: {v}")
                     else:
                         print("tool_calls ARGS: None")
-    
+
             if node_name == "tools":
                 print(f"tool name:\n{message.name}")
-    
+
             print(f"content:\n{message.content if message.content else 'None'}")
 
 
@@ -293,7 +294,7 @@ if __name__ == "__main__":
     #             new_file.write(bytes_)
     #     else:
     #         print(f)
-        
+
     # обрезать исходные pdf
     #
     # for f in glob.glob(r"../../data/IN/project1/*.pdf"):

@@ -45,7 +45,7 @@ def _run_graph(
     for chunk in graph.stream(
         input={
             "input_query": input_for_rag_search,
-            "input_for_agent_prompt": input_for_agent_prompt
+            "input_for_agent_prompt": input_for_agent_prompt,
         },
         stream_mode="updates",
         config=config,
@@ -78,12 +78,12 @@ def main(
     placeholders, table_placeholders = _load_placeholders(
         placeholders_path, table_placeholders_path
     )
-    
+
     placeholders_output = {}
-    
+
     for key, value in table_placeholders.items():
         placeholders_output[key] = value
-    
+
     for placeholder, placeholder_info in placeholders.items():
         input_for_rag_search = placeholder_info["for_rag_search"]
         input_for_agent_prompt = placeholder_info["for_agent_prompt"]

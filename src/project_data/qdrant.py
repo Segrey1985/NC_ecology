@@ -24,7 +24,6 @@ else:
 
 
 class QdrantService:
-    
     """Класс для создания коллекций, добавления в них точек и поиска похожих точек."""
 
     def __init__(self, client: QdrantClient, model: SentenceTransformer):
@@ -47,7 +46,7 @@ class QdrantService:
         self, collection_name: str, points: list[PointStruct]
     ) -> None:
         self.client.upsert(collection_name=collection_name, wait=True, points=points)
-    
+
     def run_query(self, query: str, collection_name: str, limit: int = 3):
         vector = self.model.encode([query])
         search_result = self.client.query_points(
@@ -56,6 +55,7 @@ class QdrantService:
             limit=limit,
         ).points
         return search_result
+
 
 def build_qdrant_service() -> QdrantService:
     """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
@@ -126,7 +126,7 @@ class ProjectPart:
         base = {}
         self._payload_add_part(base)
         self.payload = self._payload_add_text(base)  # теперь list[dict]
-    
+
     def _payload_add_part(self, payload) -> None:
         stem = self.file_path.stem
         part_ = stem.split("_")[0]
@@ -137,15 +137,15 @@ class ProjectPart:
             part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
         payload["part_number"] = part_number
         payload["part_name"] = self.NAME_BY_NUMBER[part_number]
-    
-    
+
     def _payload_add_text(self, base: dict) -> list[dict]:
         return [{**base, "text": chunk} for chunk in self.chunks]
-    
-    
+
     def calculate_points(self) -> None:
         if not self.vectors:
-            raise ValueError("Cannot calculate points: ProjectPart.vectors list is empty")
+            raise ValueError(
+                "Cannot calculate points: ProjectPart.vectors list is empty"
+            )
         logger.debug(f"Calculating points for <{self.file_path}> ...")
         self.points = [
             PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload)
@@ -177,6 +177,3 @@ def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
 
 if __name__ == "__main__":
     pass
-            
-        
-

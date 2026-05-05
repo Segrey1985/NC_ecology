@@ -7,7 +7,6 @@ from src.utils.logger import logger
 from config.config_file import cfg
 from src.project_data.qdrant import ProjectPart, QdrantService, QdrantClient
 
-
 # model_name = "BAAI/bge-reranker-base"
 # model_name = "DiTy/cross-encoder-russian-msmarco"
 # model_name = "BAAI/bge-reranker-v2-m3"
@@ -25,7 +24,9 @@ def load_local_reranker(reranker_model: str):
     else:
         logger.debug(f"[reranker] Loading model from HuggingFace...")
         reranker = CrossEncoder(reranker_model, device=device)
-        reranker.save(model_path)  # внутри метода save есть makedirs(..., exist_ok=True)
+        reranker.save(
+            model_path
+        )  # внутри метода save есть makedirs(..., exist_ok=True)
     logger.debug(f"[reranker] Model loading complete.")
     return reranker
 
@@ -48,12 +49,10 @@ if __name__ == "__main__":
         )
     )
     project_part.run()
-    
+
     chunks = project_part.chunks
-    query = 'Наименование объекта'
-    
+    query = "Наименование объекта"
+
     reranked = rerank_chunks(query, chunks)
     for r in reranked:
         print(r)
-        
-    

@@ -38,4 +38,3 @@ def test_qdrant_minibase_from_trim_first3_and_cleanup():
     finally:
         if qdrant_service.client.collection_exists(collection_name):
             qdrant_service.client.delete_collection(collection_name)
-

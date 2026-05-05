@@ -33,16 +33,16 @@ async def generate(
     ),
     collection_name: str = Form(uuid.uuid4().hex),
 ):
-    
+
     # проверка типов приложенных файлов
-    
+
     await validate_json(placeholders)
-    
+
     if table_placeholders:
         await validate_json(table_placeholders)
-    
+
     await validate_docx(template_docx)
-    
+
     if project_parts_zip:
         await validate_zip(project_parts_zip)
 
@@ -60,7 +60,9 @@ async def generate(
         try:
             json.loads(placeholders_bytes.decode("utf-8"))
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Некорректный JSON: {e}") from e
+            raise HTTPException(
+                status_code=400, detail=f"Некорректный JSON: {e}"
+            ) from e
         placeholders_path.write_bytes(placeholders_bytes)
 
         table_placeholders_path: Path | None = None
@@ -85,20 +87,20 @@ async def generate(
             # которую ожидает collect_project_parts (она смотрит только верхний уровень).
             project_parts_zip_bytes = await project_parts_zip.read()
             await project_parts_zip.seek(0)
-    
+
             project_parts_raw_dir = tmp_dir / "project_parts_raw"
             project_parts_raw_dir.mkdir(parents=True, exist_ok=True)
-    
+
             with zipfile.ZipFile(io.BytesIO(project_parts_zip_bytes)) as zf:
                 zf.extractall(project_parts_raw_dir)
-    
+
             pdfs = sorted(project_parts_raw_dir.rglob("*.pdf"))
             if not pdfs:
                 raise HTTPException(
                     status_code=400,
                     detail="В project_parts_zip не найдено ни одного PDF",
                 )
-    
+
             # Кладём PDFs в один уровень, избегая коллизий имён.
             for idx, pdf_path in enumerate(pdfs, start=1):
                 safe_name = pdf_path.name
@@ -117,18 +119,18 @@ async def generate(
             verbose=False,
             test_mode=False,
         )
-        
+
         zip_buf = io.BytesIO()
-        
+
         with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for file_path in output_dir.rglob("*"):
                 if file_path.is_file():
                     # сохраняем относительный путь внутри архива
                     arc_name = file_path.relative_to(output_dir)
                     zf.write(file_path, arcname=arc_name)
-        
+
         zip_buf.seek(0)
-        
+
         return StreamingResponse(
             zip_buf,
             media_type="application/zip",
@@ -137,4 +139,4 @@ async def generate(
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0" ,port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
