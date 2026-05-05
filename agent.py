@@ -20,6 +20,7 @@ from src.project_data.qdrant import (
     QdrantService,
     collect_project_parts,
     build_qdrant_service,
+    ProjectPart,
 )
 from src.project_data.reranker import rerank_chunks
 
@@ -39,19 +40,19 @@ PARAMS = GraphParams()  # глобальный объект параметров
 class AgentState(TypedDict):
     # input
     input_query: str
-    
+
     # rag
     rag_query: str
     rag_context: str
-    
+
     # agent_node
     input_for_agent_prompt: str
     answer: str
-    
+
     # check_node
     check_decision: Literal["OK", "REWRITE"]
     check_reason: str
-    
+
     # rewrite_node
     rewrite_count: int
 
@@ -59,32 +60,27 @@ class AgentState(TypedDict):
 # --- Вспомогательные функции ---
 
 
-def create_and_fill_collection(
-    collection_name: str, project_parts_path: Path | None
-) -> QdrantService:
-    qdrant_service = build_qdrant_service()
-    if not qdrant_service.client.collection_exists(collection_name):
-        logger.info(f"Создаю новую коллекцию <{collection_name}>")
-        if not project_parts_path:
-            raise ValueError(
-                f"Коллекция {collection_name} не существует. "
-                f"Требуется создание коллекции из project_parts_path. "
-                f"Аргумент project_parts_path не передан."
-            )
-        project_parts = collect_project_parts(project_parts_path)
+def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
+    project_parts = collect_project_parts(project_parts_path)
+    for project_part in project_parts:
+        project_part.run()
+    return project_parts
 
-        for project_part in project_parts:
-            project_part.run()
 
-        qdrant_service.create_collection(collection_name=collection_name)
-        for project_part in project_parts:
-            qdrant_service.add_points_to_collection(
-                collection_name=collection_name,
-                points=project_part.points,
-            )
-    else:
-        logger.info(f"Найдена существующая коллекция <{collection_name}>")
-    return qdrant_service
+def create_collection(qdrant_service: QdrantService, collection_name: str) -> None:
+    qdrant_service.create_collection(collection_name=collection_name)
+
+
+def fill_collection(
+    qdrant_service: QdrantService,
+    collection_name: str,
+    project_parts: list[ProjectPart],
+) -> None:
+    for project_part in project_parts:
+        qdrant_service.add_points_to_collection(
+            collection_name=collection_name,
+            points=project_part.points,
+        )
 
 
 # --- Tools ---
@@ -235,11 +231,26 @@ def init_graph(collection_name: str, project_parts_path: Path | None):
     """
     Инициализирует параметры и собирает граф.
     """
+
     # Обновляем глобальные параметры
     PARAMS.collection_name = collection_name
-    PARAMS.qdrant_service = create_and_fill_collection(
-        collection_name, project_parts_path=project_parts_path
-    )
+    PARAMS.qdrant_service = build_qdrant_service()
+
+    # Создаем и заполняем новую коллекцию, при необходимости
+    if not PARAMS.qdrant_service.client.collection_exists(collection_name):
+        if not project_parts_path:
+            raise ValueError(
+                f"Коллекция {collection_name} не существует. "
+                f"Требуется создание коллекции из project_parts_path. "
+                f"Аргумент project_parts_path не передан."
+            )
+        logger.info(f"Создаю новую коллекцию <{collection_name}>")
+        project_parts = create_project_parts(project_parts_path)
+        create_collection(PARAMS.qdrant_service, collection_name)
+        fill_collection(PARAMS.qdrant_service, collection_name, project_parts)
+    else:
+        logger.info(f"Найдена существующая коллекция <{collection_name}>")
+
     PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
 
     builder = StateGraph(AgentState)
@@ -269,13 +280,15 @@ if __name__ == "__main__":
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
 
-    input_query = 'Проектируемые электросети'
-    input_for_agent_prompt = 'Краткое описание проектируемых электросетей и их параметров'
+    input_query = "Проектируемые электросети"
+    input_for_agent_prompt = (
+        "Краткое описание проектируемых электросетей и их параметров"
+    )
 
     for chunk in graph.stream(
         input={
             "input_query": input_query,
-            "input_for_agent_prompt": input_for_agent_prompt
+            "input_for_agent_prompt": input_for_agent_prompt,
         },
         stream_mode="updates",
         config=config,
