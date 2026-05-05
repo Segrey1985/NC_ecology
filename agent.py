@@ -64,6 +64,7 @@ def create_and_fill_collection(
 ) -> QdrantService:
     qdrant_service = build_qdrant_service()
     if not qdrant_service.client.collection_exists(collection_name):
+        logger.info(f"Создаю новую коллекцию <{collection_name}>")
         if not project_parts_path:
             raise ValueError(
                 f"Коллекция {collection_name} не существует. "
@@ -81,7 +82,8 @@ def create_and_fill_collection(
                 collection_name=collection_name,
                 points=project_part.points,
             )
-
+    else:
+        logger.info(f"Найдена существующая коллекция <{collection_name}>")
     return qdrant_service
 
 

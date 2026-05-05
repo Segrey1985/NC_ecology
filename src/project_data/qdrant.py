@@ -146,6 +146,7 @@ class ProjectPart:
     def calculate_points(self) -> None:
         if not self.vectors:
             raise ValueError("Cannot calculate points: ProjectPart.vectors list is empty")
+        logger.debug(f"Calculating points for <{self.file_path}> ...")
         self.points = [
             PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload)
             for payload, vector in zip(self.payload, self.vectors)
