@@ -1,6 +1,8 @@
 import io
 import json
+import uuid
 import tempfile
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -9,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from main import main as run_main
-
+from src.utils.validators import validate_docx, validate_json, validate_zip
 
 app = FastAPI(title="NC_ecology API", version="0.1.0")
 
@@ -26,34 +28,32 @@ async def generate(
     table_placeholders: UploadFile | None = File(
         None, description="JSON с табличными плейсхолдерами (опционально)"
     ),
-    collection_name: str = Form("main"),
+    project_parts_zip: UploadFile | None = File(
+        None, description="Zip-архив с документами смежных разделов в формате pdf"
+    ),
+    collection_name: str = Form(uuid.uuid4().hex),
 ):
     
     # проверка типов приложенных файлов
     
-    if placeholders.content_type not in {"application/json", "text/json"}:
-        raise HTTPException(status_code=400, detail="`placeholders` должен быть JSON")
-
-    if template_docx and template_docx.content_type not in {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/octet-stream",
-    }:
-        raise HTTPException(status_code=400, detail="`template_docx` должен быть DOCX")
-
-    if table_placeholders and table_placeholders.content_type not in {
-        "application/json",
-        "text/json",
-    }:
-        raise HTTPException(
-            status_code=400, detail="`table_placeholders` должен быть JSON"
-        )
+    await validate_json(placeholders)
+    
+    if table_placeholders:
+        await validate_json(table_placeholders)
+    
+    await validate_docx(template_docx)
+    
+    if project_parts_zip:
+        await validate_zip(project_parts_zip)
 
     with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
         tmp_dir = Path(tmp)
         input_dir = tmp_dir / "in"
         output_dir = tmp_dir / "out"
+        project_parts_dir = tmp_dir / "project_parts"
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
+        project_parts_dir.mkdir(parents=True, exist_ok=True)
 
         placeholders_path = input_dir / "placeholders.json"
         placeholders_bytes = await placeholders.read()
@@ -80,11 +80,38 @@ async def generate(
             template_docx_path = input_dir / "template.docx"
             template_docx_path.write_bytes(await template_docx.read())
 
+        if project_parts_zip:
+            # Распаковываем project_parts_zip и собираем PDFs в директорию,
+            # которую ожидает collect_project_parts (она смотрит только верхний уровень).
+            project_parts_zip_bytes = await project_parts_zip.read()
+            await project_parts_zip.seek(0)
+    
+            project_parts_raw_dir = tmp_dir / "project_parts_raw"
+            project_parts_raw_dir.mkdir(parents=True, exist_ok=True)
+    
+            with zipfile.ZipFile(io.BytesIO(project_parts_zip_bytes)) as zf:
+                zf.extractall(project_parts_raw_dir)
+    
+            pdfs = sorted(project_parts_raw_dir.rglob("*.pdf"))
+            if not pdfs:
+                raise HTTPException(
+                    status_code=400,
+                    detail="В project_parts_zip не найдено ни одного PDF",
+                )
+    
+            # Кладём PDFs в один уровень, избегая коллизий имён.
+            for idx, pdf_path in enumerate(pdfs, start=1):
+                safe_name = pdf_path.name
+                dest = project_parts_dir / safe_name
+                if dest.exists():
+                    dest = project_parts_dir / f"{idx:04d}_{safe_name}"
+                shutil.copy2(pdf_path, dest)
+
         run_main(
             template_docx_path=template_docx_path,
             placeholders_path=placeholders_path,
             table_placeholders_path=table_placeholders_path,
-            project_parts_path=None,
+            project_parts_path=project_parts_dir,
             output_path=output_dir,
             collection_name=collection_name,
             verbose=False,
