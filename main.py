@@ -70,15 +70,20 @@ def main(
     verbose: bool = True,
     test_mode: bool = False,
 ):
-    placeholders, table_placeholders = _load_placeholders(
-        placeholders_path, table_placeholders_path
-    )
 
     graph = init_graph(
         collection_name=collection_name, project_parts_path=project_parts_path
     )
 
+    placeholders, table_placeholders = _load_placeholders(
+        placeholders_path, table_placeholders_path
+    )
+    
     placeholders_output = {}
+    
+    for key, value in table_placeholders.items():
+        placeholders_output[key] = value
+    
     for placeholder, placeholder_info in placeholders.items():
         input_for_rag_search = placeholder_info["for_rag_search"]
         input_for_agent_prompt = placeholder_info["for_agent_prompt"]
@@ -118,14 +123,11 @@ def main(
 if __name__ == "__main__":
 
     base = Path(__file__).parent
+    input_dir = base / "data" / "IN" / "templates" / "0_Анализ_и_Введение"
     main(
-        template_docx_path=base
-        / "data"
-        / "IN"
-        / "templates"
-        / "Анализ_и_введение.docx",
-        placeholders_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.json",
-        table_placeholders_path=None,
+        template_docx_path=input_dir / "template.docx",
+        placeholders_path=input_dir / "placeholders.json",
+        table_placeholders_path=input_dir / "table_placeholders.json",
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main",

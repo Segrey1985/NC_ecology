@@ -7,10 +7,11 @@ def test_main():
     base = Path(__file__).parents[2]
     with tempfile.TemporaryDirectory(prefix="nc_ecology_test_") as tmp_dir:
         output_dir = Path(tmp_dir) / "project1"
+        input_dir = base / "data" / "IN" / "templates" / "0_Анализ_и_Введение"
         main(
-            template_docx_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.docx",
-            placeholders_path=base / "data" / "IN" / "templates" / "Анализ_и_введение.json",
-            table_placeholders_path=None,
+            template_docx_path=input_dir / "template.docx",
+            placeholders_path=input_dir / "placeholders.json",
+            table_placeholders_path=input_dir / "table_placeholders.json",
             project_parts_path=None,
             output_path=output_dir,
             collection_name="test_data",
