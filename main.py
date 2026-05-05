@@ -2,6 +2,7 @@ import json
 import uuid
 from pprint import pprint
 from pathlib import Path
+from typing import Literal
 from langchain_core.messages import HumanMessage
 
 from agent import init_graph, PARAMS
@@ -69,7 +70,7 @@ def main(
     output_path: Path,
     collection_name: str = "main",
     verbose: bool = True,
-    test_mode: bool = False,
+    test_mode: Literal["on", "off", "mock"] = "on",
 ):
 
     graph = init_graph(
@@ -80,30 +81,30 @@ def main(
         placeholders_path, table_placeholders_path
     )
 
-    placeholders_output = {}
-
-    for key, value in table_placeholders.items():
-        placeholders_output[key] = value
-
-    for placeholder, placeholder_info in placeholders.items():
-        input_for_rag_search = placeholder_info["for_rag_search"]
-        input_for_agent_prompt = placeholder_info["for_agent_prompt"]
-        final_content = _run_graph(
-            graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
+    if test_mode == "mock":
+        placeholders_output = json.load(
+            open(
+                "data/mock/placeholders_output.json",
+                encoding="utf-8",
+            )
         )
-        placeholders_output[placeholder] = json.loads(final_content).get(
-            "answer", "__empty__"
-        )
-        if test_mode:
-            break
+    else:
+        placeholders_output = {}
 
-    # # mock
-    # placeholders_output = json.load(
-    #     open(
-    #         "data/mock/placeholders_output.json",
-    #         encoding="utf-8",
-    #     )
-    # )
+        for key, value in table_placeholders.items():
+            placeholders_output[key] = value
+
+        for placeholder, placeholder_info in placeholders.items():
+            input_for_rag_search = placeholder_info["for_rag_search"]
+            input_for_agent_prompt = placeholder_info["for_agent_prompt"]
+            final_content = _run_graph(
+                graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
+            )
+            placeholders_output[placeholder] = json.loads(final_content).get(
+                "answer", "__empty__"
+            )
+            if test_mode == "on":
+                break
 
     qdrant_service = PARAMS.qdrant_service
     if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
@@ -141,5 +142,5 @@ if __name__ == "__main__":
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main",
-        test_mode=False,
+        test_mode="off",
     )
