@@ -1,6 +1,7 @@
 import os
-from numpy import ndarray
 from pathlib import Path
+from numpy import ndarray
+from functools import lru_cache
 from sentence_transformers import CrossEncoder
 
 from src.utils.logger import logger
@@ -27,13 +28,17 @@ def load_local_reranker(reranker_model: str):
         reranker.save(
             model_path
         )  # внутри метода save есть makedirs(..., exist_ok=True)
-    logger.debug(f"[reranker] Model loading complete.")
+    logger.debug(f"[reranker] Model loading complete. Device: {device}")
     return reranker
 
 
+@lru_cache(maxsize=2)
+def get_reranker(reranker_model: str) -> CrossEncoder:
+    return load_local_reranker(reranker_model)
+
+
 def rerank_chunks(query: str, chunks: list[str]) -> list[str]:
-    model = load_local_reranker(cfg.RERANKER_MODEL)
-    print(model.device)
+    model = get_reranker(cfg.RERANKER_MODEL)
     logger.debug(f"[reranker] Re-ranking start.")
     pairs = [(query, chunk) for chunk in chunks]
     scores: ndarray = model.predict(pairs)
