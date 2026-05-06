@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agent import init_graph
+from src.agents.agent import init_graph
 from src.retrieval.qdrant import build_qdrant_service
 
 

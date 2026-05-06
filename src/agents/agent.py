@@ -242,7 +242,7 @@ def init_graph(collection_name: str, project_parts_path: Path | None):
 if __name__ == "__main__":
 
     graph = init_graph(
-        collection_name="main", project_parts_path=Path("data/IN/project1/trim")
+        collection_name="main", project_parts_path=Path("../../data/IN/project1/trim")
     )
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
