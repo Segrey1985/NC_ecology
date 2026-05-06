@@ -96,20 +96,22 @@ class ProjectPart:
         self.texts_by_page = extract_text_with_miner_coords(self.file_path)
         self.text = " ".join(self.texts_by_page)
 
-    def make_chunks(self) -> None:
+    def make_chunks(self, chunk_size=750, chunk_overlap=150) -> None:
         if not self.text:
             raise ValueError("Can't make chunks: ProjectPart.text is empty")
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=100,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
             is_separator_regex=True,
             # Используем Lookahead: (?=[А-ЯЁA-Z])
-            # Это значит: "найти точку с пробелом, если за ними идет заглавная буква"
-            separators=["\n\n", r"\. (?=[А-ЯЁA-Z])"],
+            # "найти точку с пробелом, если за ними идет заглавная буква"
+            separators=["\n\n", r"[\.\:\;] (?=[А-ЯЁA-Z])", "\n", " ", ""],
             keep_separator="end",
         )
         chunks = text_splitter.split_text(self.text)
-        self.chunks = chunks
+        # пропускаем пустые и очень короткие чанки
+        filtered_chunks = list(filter(lambda x: x and len(x.strip()) > 20, chunks))
+        self.chunks = filtered_chunks
 
     def calculate_vectors(self) -> None:
         if not self.chunks:
@@ -184,6 +186,7 @@ def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
     project_parts = _collect_project_parts(project_parts_path)
     for project_part in project_parts:
         project_part.run()
+        logger.debug(f"project_part <{project_part.file_path.name}> сформирован.")
     return project_parts
 
 
@@ -206,4 +209,15 @@ def fill_collection(
 
 
 if __name__ == "__main__":
-    pass
+
+    from config.config_file import cfg
+    
+    base = cfg.BASE_DIR
+    pp = ProjectPart(file_path=base / "data" / "IN" / "project1" / "1_ОК.17.24СТ-ПЗ.pdf")
+    print(pp)
+    pp.extract_text()
+    pp.make_chunks()
+    
+    for chunk in pp.chunks:
+        print(chunk)
+        print(f'---------------  {len(chunk)}  ---------------')
