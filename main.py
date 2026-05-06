@@ -134,7 +134,7 @@ def main(
 if __name__ == "__main__":
 
     base = Path(__file__).parent
-    input_dir = base / "data" / "IN" / "templates" / "0_Анализ_и_Введение"
+    input_dir = base / "data" / "IN" / "project1" / "schemas" / "0_Аннотация_и_Введение"
     main(
         template_docx_path=input_dir / "template.docx",
         placeholders_path=input_dir / "placeholders.json",
