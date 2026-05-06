@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent import init_graph
-from src.project_data.qdrant import build_qdrant_service
+from src.retrieval.qdrant import build_qdrant_service
 
 
 def test_init_graph_unknown_collection_without_project_parts_path_raises():

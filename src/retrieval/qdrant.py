@@ -12,7 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from config.config_file import cfg
 from src.utils.logger import logger
 from src.utils.utils import extract_text_with_miner_coords
-from src.project_data.embeddings import load_local_embedder, init_openai_embedder
+from src.retrieval.embeddings import load_local_embedder, init_openai_embedder
 
 if cfg.EMBEDDINGS_LOCAL:
     embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_NAME)
@@ -67,6 +67,7 @@ def build_qdrant_service() -> QdrantService:
 
 
 class ProjectPart:
+    """Класс описывающий смежный раздел проектной документации (АР, КР, ИОС ...)"""
 
     NAME_BY_NUMBER = {
         "1": "ПЗ",
@@ -166,13 +167,42 @@ class ProjectPart:
         )
 
 
-def collect_project_parts(folder_path: Path) -> list[ProjectPart]:
+# _______________ вспомогательные функции _______________
+
+
+def _collect_project_parts(folder_path: Path) -> list[ProjectPart]:
     """Ищет все файлы .pdf в директории и превращает их в list[ProjectPart]"""
     project_parts = []
     for file in folder_path.iterdir():
         if file.suffix == ".pdf":
             project_parts.append(ProjectPart(file_path=file))
     return project_parts
+
+
+def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
+    """Собирает все .pdf файлы в директории, превращает их в list[ProjectPart] и вычисляет Point для qdrant"""
+    project_parts = _collect_project_parts(project_parts_path)
+    for project_part in project_parts:
+        project_part.run()
+    return project_parts
+
+
+def create_collection(qdrant_service: QdrantService, collection_name: str) -> None:
+    """Создает коллекцию collection_name в указанном qdrant_service"""
+    qdrant_service.create_collection(collection_name=collection_name)
+
+
+def fill_collection(
+    qdrant_service: QdrantService,
+    collection_name: str,
+    project_parts: list[ProjectPart],
+) -> None:
+    """Для каждого project_part добавляет project_part.points в коллекцию collection_name сервиса qdrant_service"""
+    for project_part in project_parts:
+        qdrant_service.add_points_to_collection(
+            collection_name=collection_name,
+            points=project_part.points,
+        )
 
 
 if __name__ == "__main__":

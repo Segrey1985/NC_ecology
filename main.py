@@ -9,7 +9,7 @@ from agent import init_graph, PARAMS
 from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
-from src.templates.template_engine import fill_template
+from src.templates.docx_template_engine import fill_docx_template
 
 __placeholders_example = {
     "НАИМЕНОВАНИЕ_ПРОЕКТА": "Наименование проекта",
@@ -124,7 +124,7 @@ def main(
 
         if template_docx_path:
             result_template_out_path = output_path / "result_template.docx"
-            fill_template(
+            fill_docx_template(
                 template_path=template_docx_path,
                 data=placeholders_output,
                 output_docx_path=result_template_out_path,

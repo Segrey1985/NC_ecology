@@ -25,6 +25,12 @@ def is_valid_uuid4_hex(value: str) -> bool:
     return bool(UUID4_HEX_PATTERN.fullmatch(value))
 
 
+def format_rag_context(chunks: list[str]) -> str:
+    if not chunks:
+        return "Релевантный контекст не найден."
+    return "\n\n".join(f"[{idx}] {chunk}" for idx, chunk in enumerate(chunks, start=1))
+
+
 # ___ PDF ___
 
 
@@ -237,7 +243,7 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
             input_pdf_file.close()
 
 
-# ___ langGraph ___
+# ___ LangGraph ___
 
 
 def print_chunk(chunk):

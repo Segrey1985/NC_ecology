@@ -6,7 +6,7 @@ from config.config_file import cfg
 from src.utils.logger import logger
 
 
-def fill_template(
+def fill_docx_template(
     template_path: Path,
     data: Path | dict,
     output_docx_path: Path,
@@ -31,7 +31,7 @@ def fill_template(
 
 
 if __name__ == "__main__":
-    fill_template(
+    fill_docx_template(
         template_path=cfg.BASE_DIR / "data" / "IN" / "Анализ_и_введение.docx",
         data=cfg.BASE_DIR / "data" / "IN" / "Анализ_и_введение.json",
         output_docx_path=cfg.BASE_DIR

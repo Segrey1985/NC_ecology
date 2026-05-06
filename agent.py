@@ -2,11 +2,10 @@ import uuid
 from pathlib import Path
 from typing import Literal, Optional, TypedDict
 
-from langgraph.graph import MessagesState, StateGraph, START, END
+from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
-    AIMessage,
 )
 from pydantic import BaseModel, Field
 
@@ -14,15 +13,16 @@ from src.utils.logger import logger
 from config.config_file import cfg
 from config.langfuse_client import langfuse_config
 from src.models import LlmModel
-from src.utils.utils import print_chunk
+from src.utils.utils import print_chunk, format_rag_context
 from src.pydantic_models import StructuredResponse
-from src.project_data.qdrant import (
+from src.retrieval.qdrant import (
     QdrantService,
-    collect_project_parts,
     build_qdrant_service,
-    ProjectPart,
+    create_project_parts,
+    create_collection,
+    fill_collection
 )
-from src.project_data.reranker import rerank_chunks
+from src.retrieval.reranker import rerank_chunks
 
 
 class GraphParams:
@@ -57,32 +57,6 @@ class AgentState(TypedDict):
     rewrite_count: int
 
 
-# --- Вспомогательные функции ---
-
-
-def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
-    project_parts = collect_project_parts(project_parts_path)
-    for project_part in project_parts:
-        project_part.run()
-    return project_parts
-
-
-def create_collection(qdrant_service: QdrantService, collection_name: str) -> None:
-    qdrant_service.create_collection(collection_name=collection_name)
-
-
-def fill_collection(
-    qdrant_service: QdrantService,
-    collection_name: str,
-    project_parts: list[ProjectPart],
-) -> None:
-    for project_part in project_parts:
-        qdrant_service.add_points_to_collection(
-            collection_name=collection_name,
-            points=project_part.points,
-        )
-
-
 # --- Tools ---
 
 
@@ -99,12 +73,6 @@ def search_in_related_disciplines(query: str) -> list[str]:
     texts = [point.payload["text"] for point in relevant_points]
     reranked = rerank_chunks(query, texts)[0:5]
     return [chunk for chunk, _score in reranked]
-
-
-def format_rag_context(chunks: list[str]) -> str:
-    if not chunks:
-        return "Релевантный контекст не найден."
-    return "\n\n".join(f"[{idx}] {chunk}" for idx, chunk in enumerate(chunks, start=1))
 
 
 # --- Nodes ---

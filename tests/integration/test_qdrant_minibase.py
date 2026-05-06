@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from src.project_data.qdrant import ProjectPart, build_qdrant_service
+from src.retrieval.qdrant import ProjectPart, build_qdrant_service
 
 
 def test_qdrant_minibase_from_trim_first3_and_cleanup():

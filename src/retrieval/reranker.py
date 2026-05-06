@@ -5,7 +5,7 @@ from sentence_transformers import CrossEncoder
 
 from src.utils.logger import logger
 from config.config_file import cfg
-from src.project_data.qdrant import ProjectPart, QdrantService, QdrantClient
+from src.retrieval.qdrant import ProjectPart
 
 # model_name = "BAAI/bge-reranker-base"
 # model_name = "DiTy/cross-encoder-russian-msmarco"

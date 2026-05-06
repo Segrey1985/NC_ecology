@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.project_data.qdrant import ProjectPart, build_qdrant_service
+from src.retrieval.qdrant import ProjectPart, build_qdrant_service
 
 
 def test_qdrant_service():
