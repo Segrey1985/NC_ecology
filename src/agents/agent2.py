@@ -43,12 +43,14 @@ class Agent2State(TypedDict):
 
     # agent_node
     input_for_agent_prompt: str
-    output_model: BaseModel
+    # В цикле снаружи передаётся pydantic-модель (класс), который нужно заполнить.
+    output_model: type[BaseModel]
     answer: str
 
     # optional loop
     check_decision: Literal["OK", "REWRITE"]
     check_reason: str
+    rewrite_focus: str
     rewrite_count: int
 
 
@@ -56,9 +58,13 @@ def _search_in_related_disciplines(query: str) -> list[str]:
     qdrant_service = PARAMS_2.qdrant_service
     collection_name = PARAMS_2.collection_name
     if qdrant_service is None or collection_name is None:
-        raise RuntimeError("Qdrant не инициализирован. Сначала вызовите init_graph_2().")
+        raise RuntimeError(
+            "Qdrant не инициализирован. Сначала вызовите init_graph_2()."
+        )
 
-    relevant_points = qdrant_service.run_query(query, collection_name=collection_name, limit=30)
+    relevant_points = qdrant_service.run_query(
+        query, collection_name=collection_name, limit=30
+    )
     texts = [point.payload["text"] for point in relevant_points]
     reranked = rerank_chunks(query, texts)[0:5]
     return [chunk for chunk, _score in reranked]
@@ -78,7 +84,8 @@ def answer_node(state: Agent2State) -> Agent2State:
     system_message = SystemMessage(
         "Ты помощник по извлечению данных по строительному проекту.\n"
         "Заполни JSON строго по переданной схеме и только на основе RAG-контекста.\n"
-        "Если значения нет в контексте, ставь строку '__empty__'.\n"
+        "Если значения нет в контексте, не выдумывай. Используй только допустимые схемой "
+        "пустые значения (например, null для Optional-полей или пустые списки там, где это уместно).\n"
         "Не добавляй поля, которых нет в схеме."
     )
     messages = [
@@ -90,12 +97,10 @@ def answer_node(state: Agent2State) -> Agent2State:
             )
         ),
     ]
-    response = llm.with_structured_output(state['output_model']).invoke(messages)
+    response = llm.with_structured_output(state["output_model"]).invoke(messages)
     response_json = response.model_dump_json()
 
-    return {
-        "answer": response_json
-    }
+    return {"answer": response_json}
 
 
 class AnswerCheck(BaseModel):
@@ -104,50 +109,65 @@ class AnswerCheck(BaseModel):
         description="OK, если контекста хватило; иначе REWRITE.",
     )
     reason: str = Field(..., description="Краткая причина решения.")
+    rewrite_focus: Optional[str] = Field(
+        None,
+        description="Что именно нужно найти/уточнить при переписывании RAG-запроса.",
+    )
 
 
 def check_node(state: Agent2State) -> Agent2State:
-    """
-    Дешёвая эвристика: если слишком много '__empty__', пробуем переписать RAG-запрос.
-    """
-    rewrite_count = state.get("rewrite_count", 0)
-    try:
-        data = json.loads(state.get("answer") or "{}")
-    except Exception:
-        return {
-            "check_decision": "REWRITE" if rewrite_count < 2 else "OK",
-            "check_reason": "Ответ не является валидным JSON.",
-        }
-
-    missing = _collect_empty_fields(data)
-    if len(missing) >= 3 and rewrite_count < 2:
-        return {
-            "check_decision": "REWRITE",
-            "check_reason": "Много пустых полей: " + ", ".join(missing[:10]),
-        }
-
-    return {"check_decision": "OK", "check_reason": "Контекст достаточен."}
-
-
-def rewrite_query_node(state: Agent2State) -> Agent2State:
     llm = PARAMS_2.llm
+
     system_message = SystemMessage(
-        "Перепиши запрос для RAG-поиска так, чтобы найти недостающий контекст. "
-        "Верни только текст запроса."
+        "Проверь, можно ли считать ответ корректным заполнением схемы на основе RAG-контекста.\n"
+        "Верни OK, если ответ можно использовать.\n"
+        "Верни REWRITE, если RAG-контекст не даёт достаточно данных/есть явные пробелы и нужно "
+        "переформулировать запрос для поиска.\n"
     )
     messages = [
         system_message,
         HumanMessage(
             content=(
-                f"Исходный запрос:\n{state['input_query']}\n\n"
+                f"Задача (что нужно извлечь):\n{state['input_for_agent_prompt']}\n\n"
+                f"RAG-контекст:\n{state.get('rag_context', '')}\n\n"
+                f"Ответ (JSON):\n{state.get('answer', '')}"
+            )
+        ),
+    ]
+
+    check = llm.with_structured_output(AnswerCheck).invoke(messages)
+    return {
+        "check_decision": check.decision,
+        "check_reason": check.reason,
+        "rewrite_focus": check.rewrite_focus or "",
+    }
+
+
+def rewrite_query_node(state: Agent2State) -> Agent2State:
+    llm = PARAMS_2.llm
+    system_message = SystemMessage(
+        "Перепиши запрос для RAG-поиска так, чтобы следующий поиск нашёл контекст, "
+        "которого не хватило для заполнения схемы. Верни только текст запроса."
+    )
+    messages = [
+        system_message,
+        HumanMessage(
+            content=(
+                f"Исходный запрос:\n{state.get('input_query', '')}\n\n"
                 f"Предыдущий RAG-запрос:\n{state['rag_query']}\n\n"
-                f"Причина:\n{state.get('check_reason', '')}\n\n"
-                "Сделай запрос более конкретным, упомяни недостающие поля и возможные синонимы."
+                f"Причина повторного поиска:\n{state.get('check_reason', '')}\n\n"
+                f"Фокус переписывания (если указан):\n{state.get('rewrite_focus', '')}\n\n"
+                f"Задача (что нужно извлечь):\n{state.get('input_for_agent_prompt', '')}\n\n"
+                f"Предыдущий ответ (JSON):\n{state.get('answer', '')}\n\n"
+                "Сделай запрос более конкретным: используй термины из задачи, "
+                "возможные синонимы и формулировки из предметной области."
             )
         ),
     ]
     response = llm.invoke(messages)
-    rewritten = str(getattr(response, "content", response)).strip() or state["input_query"]
+    rewritten = (
+        str(getattr(response, "content", response)).strip() or state["input_query"]
+    )
     logger.info(f"[agent_2] RAG query rewritten: {rewritten}")
     return {"rag_query": rewritten, "rewrite_count": state.get("rewrite_count", 0) + 1}
 
@@ -198,4 +218,3 @@ def init_graph_2(collection_name: str, project_parts_path: Path | None):
     builder.add_edge("rewrite_query_node", "rag_search_node")
 
     return builder.compile()
-
