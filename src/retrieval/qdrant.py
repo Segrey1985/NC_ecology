@@ -29,10 +29,21 @@ class QdrantService:
     def __init__(self, client: QdrantClient, model: SentenceTransformer):
         self.client = client
         self.model = model
-        self.vector_size = len(model.encode(["test"])[0])
+        self.vector_size: int | None = None
 
     def create_collection(self, collection_name: str) -> None:
         if not self.client.collection_exists(collection_name):
+            if self.vector_size is None:
+                try:
+                    self.vector_size = len(self.model.encode(["test"])[0])
+                except Exception:
+                    logger.exception(
+                        "[qdrant] Failed to determine vector size from embedder."
+                    )
+                    raise RuntimeError(
+                        "Не удалось определить размер эмбеддингов для создания коллекции Qdrant. "
+                        "Проверьте настройки EMBEDDINGS (локальные/внешние) и доступность API."
+                    )
             self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(
@@ -48,13 +59,27 @@ class QdrantService:
         self.client.upsert(collection_name=collection_name, wait=True, points=points)
 
     def run_query(self, query: str, collection_name: str, limit: int = 3):
-        vector = self.model.encode([query])
-        search_result = self.client.query_points(
-            collection_name=collection_name,
-            query=vector[0],
-            limit=limit,
-        ).points
-        return search_result
+        """
+        Выполняет векторный поиск по коллекции.
+
+        Важно: если эмбеддинги не удаётся получить (например, из-за проблем с внешним API),
+        не "роняем" весь агент, а возвращаем пустой результат. Это позволяет пайплайну
+        корректно отработать дальше (с пустым контекстом) и показать причину на уровне LLM-check.
+        """
+        try:
+            vector = self.model.encode([query])
+            search_result = self.client.query_points(
+                collection_name=collection_name,
+                query=vector[0],
+                limit=limit,
+            ).points
+            return search_result
+        except Exception:
+            logger.exception(
+                "[qdrant] Failed to encode/query. Returning empty search result. "
+                f"collection={collection_name}, query={query!r}"
+            )
+            return []
 
 
 def build_qdrant_service() -> QdrantService:
