@@ -19,6 +19,7 @@ from src.retrieval.qdrant import (
 from src.retrieval.reranker import rerank_chunks
 from src.utils.logger import logger
 from src.utils.utils import format_rag_context
+from src.utils.validators import validate_and_dump_json_str
 
 
 class GraphParams:
@@ -97,10 +98,48 @@ def answer_node(state: Agent2State) -> Agent2State:
             )
         ),
     ]
-    response = llm.with_structured_output(state["output_model"]).invoke(messages)
-    response_json = response.model_dump_json()
-
-    return {"answer": response_json}
+    
+    try:
+        response = llm.with_structured_output(state["output_model"], strict=True).invoke(messages)
+        response_json = response.model_dump_json()
+        return {"answer": response_json}
+    
+    except Exception:
+        # structured_output может падать на несовпадении типов (pydantic ValidationError).
+        # fallback: просим вернуть "сырой" JSON. Если и это не удаётся — возвращаем пустой объект,
+        # чтобы граф продолжил работу и check_node мог инициировать rewrite.
+        logger.exception("Structured output validation failed in answer_node. trying fallback №1")
+        
+        fallback_system = SystemMessage(
+            "Сформируй ОДИН валидный JSON-объект строго по указанной схеме.\n"
+            "Требования:\n"
+            "- Соблюдай типы (int/float/bool/string/null/array/object).\n"
+            "- Не добавляй лишних полей.\n"
+            "- Если значения нет в контексте: используй null (для Optional) или пустой список, если поле list.\n"
+            "Верни только JSON, без пояснений и без markdown."
+        )
+        
+        try:
+            raw = llm.invoke(
+                [
+                    fallback_system,
+                    HumanMessage(
+                        content=(
+                            f"Схема (Pydantic модель): {state['output_model'].__name__}\n"
+                            f"Задача:\n{state['input_for_agent_prompt']}\n\n"
+                            f"RAG-контекст:\n{state.get('rag_context', '')}"
+                        )
+                    ),
+                ]
+            )
+            response_json = validate_and_dump_json_str(state['output_model'], str(getattr(raw, "content", raw)))
+            return {"answer": response_json}
+        except Exception:
+            logger.exception(
+                "Structured output validation failed in answer_node in fallback №1. "
+                "Doing fallback №2 and return empty dict"
+            )
+            return {"answer": "{}"}
 
 
 class AnswerCheck(BaseModel):

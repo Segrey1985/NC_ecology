@@ -6,6 +6,9 @@ from posixpath import normpath as posix_normpath
 import re
 from fastapi.exceptions import HTTPException
 from fastapi import UploadFile
+from pydantic import BaseModel
+
+from src.utils.logger import logger
 
 
 async def validate_zip(file: UploadFile):
@@ -164,3 +167,35 @@ async def validate_json(file: UploadFile):
         raise HTTPException(
             status_code=400, detail=f"{file.filename} is not valid JSON"
         )
+
+
+def validate_and_dump_json_str(obj: type[BaseModel], json_str: str) -> str:
+    """
+    Гарантирует валидный JSON-стринг, соответствующий `output_model`.
+    Если не удаётся распарсить/провалидировать — возвращает "{}".
+    """
+    json_str = (json_str or "").strip()
+    if not json_str:
+        return "{}"
+
+    # 1) Пробуем распарсить как есть
+    try:
+        data = json.loads(json_str)
+    except Exception:
+        # 2) Пытаемся вытащить объект между первой { и последней }
+        try:
+            start = json_str.find("{")
+            end = json_str.rfind("}")
+            if start == -1 or end == -1 or end <= start:
+                return "{}"
+            data = json.loads(json_str[start : end + 1])
+        except Exception:
+            return "{}"
+
+    # 3) Pydantic-валидация
+    try:
+        validated = obj.model_validate(data)
+        return validated.model_dump_json()
+    except Exception:
+        logger.exception("Pydantic validation failed for fallback JSON.")
+        return "{}"
