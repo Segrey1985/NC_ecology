@@ -246,11 +246,26 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
 # ___ LangGraph ___
 
 
+def _safe_print(text: str) -> None:
+    """
+    Безопасная печать для Windows-консолей с ограниченной кодировкой (например, cp1251).
+    Не даёт падать на UnicodeEncodeError: заменяет непечатаемые символы.
+    """
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        import sys
+
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        print(safe)
+
+
 def print_chunk(chunk):
     for node_name, data in chunk.items():
 
-        print(f"\n\n{'=' * 30} {node_name} {'=' * 30}")
-        print(f"Full response:\n{data}")
+        _safe_print(f"\n\n{'=' * 30} {node_name} {'=' * 30}")
+        _safe_print(f"Full response:\n{data}")
 
         if not data:
             continue
@@ -261,9 +276,9 @@ def print_chunk(chunk):
         fields_without_messages = {k: v for k, v in data.items() if k != "messages"}
         for key, value in fields_without_messages.items():
             if key not in ignore_keys:
-                print(f"{key}:\n{value if value else 'None'}")
+                _safe_print(f"{key}:\n{value if value else 'None'}")
             else:
-                print(f"{key}: ...")
+                _safe_print(f"{key}: ...")
 
         # state['messages']
 
@@ -277,18 +292,18 @@ def print_chunk(chunk):
             if isinstance(message, AIMessage) and message.tool_calls:
 
                 for tool_call in message.tool_calls:
-                    print(f"tool_call name: {tool_call['name']}")
+                    _safe_print(f"tool_call name: {tool_call['name']}")
                     if tool_call["args"]:
-                        print("tool_calls ARGS:")
+                        _safe_print("tool_calls ARGS:")
                         for i, (k, v) in enumerate(tool_call["args"].items()):
-                            print(f"ARG[{i+1}] = {k}: {v}")
+                            _safe_print(f"ARG[{i+1}] = {k}: {v}")
                     else:
-                        print("tool_calls ARGS: None")
+                        _safe_print("tool_calls ARGS: None")
 
             if node_name == "tools":
-                print(f"tool name:\n{message.name}")
+                _safe_print(f"tool name:\n{message.name}")
 
-            print(f"content:\n{message.content if message.content else 'None'}")
+            _safe_print(f"content:\n{message.content if message.content else 'None'}")
 
 
 if __name__ == "__main__":
