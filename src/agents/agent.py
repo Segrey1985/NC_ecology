@@ -109,7 +109,7 @@ def answer_node(state: AgentState) -> AgentState:
             )
         ),
     ]
-    response = llm.with_structured_output(StructuredResponse).invoke(messages)
+    response = llm.with_structured_output(StructuredResponse, strict=True).invoke(messages)
     response_json = response.model_dump_json()
 
     return {
@@ -147,7 +147,7 @@ def check_node(state: AgentState) -> AgentState:
             )
         ),
     ]
-    check = llm.with_structured_output(AnswerCheck).invoke(messages)
+    check = llm.with_structured_output(AnswerCheck, strict=True).invoke(messages)
 
     return {
         "check_decision": check.decision,

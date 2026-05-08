@@ -174,7 +174,7 @@ def check_node(state: Agent2State) -> Agent2State:
         ),
     ]
 
-    check = llm.with_structured_output(AnswerCheck).invoke(messages)
+    check = llm.with_structured_output(AnswerCheck, strict=True).invoke(messages)
     return {
         "check_decision": check.decision,
         "check_reason": check.reason,
