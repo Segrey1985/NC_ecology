@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 from numpy import ndarray
 from functools import lru_cache
@@ -32,18 +33,38 @@ def load_local_reranker(reranker_model: str):
     return reranker
 
 
+_reranker_init_lock = threading.Lock()
+
+
 @lru_cache(maxsize=2)
 def get_reranker(reranker_model: str) -> CrossEncoder:
-    return load_local_reranker(reranker_model)
+    with _reranker_init_lock:
+        return load_local_reranker(reranker_model)
 
 
-def rerank_chunks(query: str, chunks: list[str]) -> list[str]:
+def rerank_chunks(
+    query: str,
+    chunks: list[str],
+    *,
+    top_k: int | None = None,
+    batch_size: int = 32,
+) -> list[tuple[str, float]]:
+    
+    if not chunks:
+        return []
+    
     model = get_reranker(cfg.RERANKER_MODEL)
     logger.debug(f"[reranker] Re-ranking start.")
+
     pairs = [(query, chunk) for chunk in chunks]
-    scores: ndarray = model.predict(pairs)
-    reranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
+    scores: ndarray = model.predict(pairs, batch_size=batch_size)
+
+    order = scores.argsort()[::-1]
+    if top_k is not None:
+        order = order[:top_k]
+    reranked = [(chunks[i], scores[i]) for i in order]
     logger.debug(f"[reranker] Re-ranking complete.")
+    
     return reranked
 
 
