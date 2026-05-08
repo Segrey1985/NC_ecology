@@ -14,6 +14,8 @@ def create_model(model_name):
         base_url="https://api.aitunnel.ru/v1/",
         timeout=30,
         temperature=cfg.TEMPERATURE,
+        use_responses_api=True,
+        output_version="responses/v1",
     )
     return model
 

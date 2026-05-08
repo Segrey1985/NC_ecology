@@ -1,3 +1,4 @@
+import warnings
 from typing import Literal
 import torch
 import pathlib
@@ -6,12 +7,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.utils.logger import logger
 
+warnings.filterwarnings(
+    "ignore",
+    message="Pydantic serializer warnings",
+)
+
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 models = {
     "claude": "claude-sonnet-4.6",
     "gemini3.1pro": "gemini-3.1-pro-preview",
-    "gpt5mini": "gpt-5-mini",
+    "gpt54mini": "gpt-5.4-mini",
     "gemini3.1flash": "gemini-3.1-flash-lite-preview",
     "glm5": "glm-5",
     "flash": "gemini-3-flash-preview",
@@ -28,7 +34,7 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    MODEL_NAME: str = models["flash"]
+    MODEL_NAME: str = models["gpt54mini"]
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
