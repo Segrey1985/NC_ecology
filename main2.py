@@ -5,9 +5,11 @@ import importlib
 from pathlib import Path
 from typing import Literal
 
-from src.agents.agent2 import init_graph_2, PARAMS_2
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from src.agents.agent2 import init_graph_2, PARAMS_2
 from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
@@ -88,6 +90,23 @@ def _build_inputs_for_model(model: type[BaseModel]) -> tuple[str, str]:
     return input_for_rag_search, input_for_agent_prompt
 
 
+def thread_run_graph_for_model(graph: CompiledStateGraph, model: type[BaseModel], verbose: bool):
+    input_for_rag_search, input_for_agent_prompt = _build_inputs_for_model(model)
+
+    final_content = _run_graph(
+        graph,
+        input_for_rag_search=input_for_rag_search,
+        input_for_agent_prompt=input_for_agent_prompt,
+        output_model=model,
+        verbose=verbose,
+    )
+
+    return (
+        model.__name__,
+        json.loads(final_content) if final_content else {},
+    )
+
+
 def main(
     template_docx_path: Path | None,
     project_parts_path: Path | None,
@@ -96,33 +115,41 @@ def main(
     collection_name: str = "main",
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock"] = "on",
+    max_workers: int | None = None,
 ):
-
+    
+    # init graph
     graph = init_graph_2(
         collection_name=collection_name, project_parts_path=project_parts_path
     )
 
+    # get models from module
     models = _iter_models_from_module(models_module_path)
     if not models:
         raise RuntimeError(
             f"Не нашёл pydantic-моделей в модуле `{models_module_path}`."
         )
+    if test_mode == "on":
+        models = models[:1]
+        
+    # run thread_run_graph_for_model in ThreadPoolExecutor
 
-    results: dict[str, object] = {}
-    for model in models:
-        input_for_rag_search, input_for_agent_prompt = _build_inputs_for_model(model)
-        final_content = _run_graph(
-            graph,
-            input_for_rag_search=input_for_rag_search,
-            input_for_agent_prompt=input_for_agent_prompt,
-            output_model=model,
-            verbose=verbose,
-        )
-        # agent2 возвращает JSON самой модели
-        results[model.__name__] = json.loads(final_content) if final_content else {}
+    if max_workers is None:
+        max_workers = min(4, max(1, len(models)))
+    
+    results: dict[str, object] = {model.__name__: None for model in models}
 
-        if test_mode == "on":
-            break
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(
+                thread_run_graph_for_model, graph=graph, model=model, verbose=verbose
+            )
+            for model in models
+        ]
+
+        for future in as_completed(futures):
+            model_name, result = future.result()
+            results[model_name] = result
 
     qdrant_service = PARAMS_2.qdrant_service
     if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
@@ -153,4 +180,5 @@ if __name__ == "__main__":
         models_module_path="src.ecology_chapters.chapter1.models",
         collection_name="main",
         test_mode="off",
+        max_workers=8,
     )
