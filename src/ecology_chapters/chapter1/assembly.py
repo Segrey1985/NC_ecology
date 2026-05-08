@@ -2,6 +2,9 @@
 # Корневая модель
 # ─────────────────────────────────────────────
 
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_pascal  # snake → PascalCase
+
 from .models import *
 
 
@@ -14,6 +17,10 @@ class Chapter1Data(BaseModel):
         data = Chapter1Data(**json_data)
         rendered = template.render(**data.model_dump())
     """
+    model_config = ConfigDict(
+        alias_generator=to_pascal,       # "architecture" → "Architecture"
+        populate_by_name=True,           # можно использовать и snake_case тоже
+    )
     facility: Facility
     land_plot: LandPlot
     sanitary_zone: SanitaryZone
