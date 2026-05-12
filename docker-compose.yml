@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
 
   app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: ecology-app-cuda
     depends_on:
       - qdrant
@@ -24,3 +27,5 @@ services:
 
 volumes:
   qdrant_data:
+
+# docker compose -p eco-cuda-compose up --build
