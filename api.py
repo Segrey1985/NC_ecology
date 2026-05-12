@@ -11,18 +11,53 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from main import main as run_main
+from main2 import main as run_main2
 from src.utils.validators import validate_docx, validate_json, validate_zip
 from src.utils.logger import logger
 
 app = FastAPI(title="NC_ecology API", version="0.1.0")
 
 
-@app.get("/health")
+def _extract_project_parts_pdfs(
+    project_parts_zip_bytes: bytes, project_parts_dir: Path
+) -> None:
+    project_parts_raw_dir = project_parts_dir.parent / "project_parts_raw"
+    project_parts_raw_dir.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(io.BytesIO(project_parts_zip_bytes)) as zf:
+        zf.extractall(project_parts_raw_dir)
+
+    pdfs = sorted(project_parts_raw_dir.rglob("*.pdf"))
+    if not pdfs:
+        raise HTTPException(
+            status_code=400,
+            detail="В project_parts_zip не найдено ни одного PDF",
+        )
+
+    for idx, pdf_path in enumerate(pdfs, start=1):
+        safe_name = pdf_path.name
+        dest = project_parts_dir / safe_name
+        if dest.exists():
+            dest = project_parts_dir / f"{idx:04d}_{safe_name}"
+        shutil.copy2(pdf_path, dest)
+
+
+@app.get(
+    "/health",
+    summary="Проверка состояния сервиса",
+    description="Эндпоинт используется для проверки доступности API.",
+    tags=["System"],
+)
 def health():
     return {"status": "ok"}
 
 
-@app.post("/generate")
+@app.post(
+    "/generate",
+    summary = "Аннотация и введение",
+    description = "Эндпоинт используется для генерации глав 'Аннотация' и 'Введение'",
+    tags = ["Generation"],
+)
 async def generate(
     placeholders: UploadFile = File(..., description="JSON с плейсхолдерами"),
     template_docx: UploadFile = File(..., description="DOCX шаблон"),
@@ -89,27 +124,7 @@ async def generate(
             # которую ожидает collect_project_parts (она смотрит только верхний уровень).
             project_parts_zip_bytes = await project_parts_zip.read()
             await project_parts_zip.seek(0)
-
-            project_parts_raw_dir = tmp_dir / "project_parts_raw"
-            project_parts_raw_dir.mkdir(parents=True, exist_ok=True)
-
-            with zipfile.ZipFile(io.BytesIO(project_parts_zip_bytes)) as zf:
-                zf.extractall(project_parts_raw_dir)
-
-            pdfs = sorted(project_parts_raw_dir.rglob("*.pdf"))
-            if not pdfs:
-                raise HTTPException(
-                    status_code=400,
-                    detail="В project_parts_zip не найдено ни одного PDF",
-                )
-
-            # Кладём PDFs в один уровень, избегая коллизий имён.
-            for idx, pdf_path in enumerate(pdfs, start=1):
-                safe_name = pdf_path.name
-                dest = project_parts_dir / safe_name
-                if dest.exists():
-                    dest = project_parts_dir / f"{idx:04d}_{safe_name}"
-                shutil.copy2(pdf_path, dest)
+            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
         
         logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
@@ -144,6 +159,87 @@ async def generate(
             zip_buf,
             media_type="application/zip",
             headers={"Content-Disposition": "attachment; filename=result.zip"},
+        )
+
+
+@app.post(
+    "/chapter1",
+    summary="Глава 1. ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ",
+    description="Эндпоинт используется для генерации главы 'ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ'",
+    tags=["Generation"],
+
+)
+async def chapter1(
+    
+    template_docx: UploadFile | None = File(
+        None, description="DOCX шаблон для сборки (опционально)"
+    ),
+    project_parts_zip: UploadFile | None = File(
+        None, description="Zip-архив с PDF смежных разделов (опционально)"
+    ),
+    collection_name: str = Form(uuid.uuid4().hex),
+    max_workers: int | None = Form(
+        8, description="Число потоков для параллельного запуска моделей"
+    ),
+):
+    chapter_module_path = "src.ecology_chapters.chapter1"
+    
+    if template_docx:
+        await validate_docx(template_docx)
+
+    if project_parts_zip:
+        await validate_zip(project_parts_zip)
+
+    with tempfile.TemporaryDirectory(prefix="nc_ecology2_") as tmp:
+        tmp_dir = Path(tmp)
+        input_dir = tmp_dir / "in"
+        output_dir = tmp_dir / "out"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        template_docx_path: Path | None = None
+        if template_docx:
+            template_docx_path = input_dir / "template.docx"
+            template_docx_path.write_bytes(await template_docx.read())
+
+        project_parts_dir: Path | None = None
+        if project_parts_zip:
+            project_parts_dir = tmp_dir / "project_parts"
+            project_parts_dir.mkdir(parents=True, exist_ok=True)
+            project_parts_zip_bytes = await project_parts_zip.read()
+            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
+
+        logger.info(f"generate2 {template_docx_path=}")
+        logger.info(f"generate2 {project_parts_dir=}")
+        logger.info(f"generate2 {output_dir=}")
+        logger.info(f"generate2 {collection_name=}")
+        logger.info(f"generate2 {max_workers=}")
+
+        run_main2(
+            template_docx_path=template_docx_path,
+            project_parts_path=project_parts_dir,
+            output_path=output_dir,
+            chapter_module_path=chapter_module_path,
+            collection_name=collection_name,
+            verbose=False,
+            test_mode="off",
+            max_workers=max_workers,
+        )
+
+        zip_buf = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for file_path in output_dir.rglob("*"):
+                if file_path.is_file():
+                    arc_name = file_path.relative_to(output_dir)
+                    zf.write(file_path, arcname=arc_name)
+
+        zip_buf.seek(0)
+
+        return StreamingResponse(
+            zip_buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=result2.zip"},
         )
 
 
