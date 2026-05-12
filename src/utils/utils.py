@@ -4,6 +4,7 @@ import pypdf
 import pathlib
 from io import BytesIO
 from typing import Optional
+from pydantic import BaseModel
 from pdfminer.layout import LTTextBox, LTTextLine
 from pdfminer.high_level import extract_pages as extract_pages_miner
 from langchain_core.messages import (
@@ -305,6 +306,86 @@ def print_chunk(chunk):
 
             _safe_print(f"content:\n{message.content if message.content else 'None'}")
 
+
+# ___ inspect & importlib ___
+
+
+import inspect
+import importlib
+
+
+def iter_models_from_module(module_path: str) -> list[type[BaseModel]]:
+    """
+    Берём только pydantic-модели, объявленные именно в модуле `module_path`,
+    чтобы не тащить импортированные классы (например, из `inner`).
+    """
+    module = importlib.import_module(module_path)
+    out: list[type[BaseModel]] = []
+    for _name, obj in vars(module).items():
+        if not inspect.isclass(obj):
+            continue
+        if not issubclass(obj, BaseModel):
+            continue
+        if obj is BaseModel:
+            continue
+        if getattr(obj, "__module__", "") != module.__name__:
+            continue
+        out.append(obj)
+
+    out.sort(key=lambda cls: cls.__name__)
+    return out
+
+
+def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
+    """
+    Достаём единственную корневую модель сборки из `<chapter>.assembly`.
+    В `assembly.py` должен быть ровно один локально объявленный класс-наследник BaseModel.
+    """
+    module = importlib.import_module(assembly_module_path)
+
+    candidates: list[type[BaseModel]] = []
+    for _name, obj in vars(module).items():
+        if not inspect.isclass(obj):
+            continue
+        if not issubclass(obj, BaseModel):
+            continue
+        if obj is BaseModel:
+            continue
+        if getattr(obj, "__module__", "") != module.__name__:
+            continue
+        candidates.append(obj)
+
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"В модуле `{assembly_module_path}` ожидается ровно 1 BaseModel-класс, "
+            f"найдено: {len(candidates)}."
+        )
+
+    return candidates[0]
+
+
+def build_inputs_for_model(model: type[BaseModel]) -> tuple[str, str]:
+    doc = (inspect.getdoc(model) or "").strip()
+    fields = getattr(model, "model_fields", {}) or {}
+
+    field_lines: list[str] = []
+    filed_descriptions: list[str] = []
+    for f_name, f_info in fields.items():
+        desc = getattr(f_info, "description", None)
+        if desc:
+            field_lines.append(f"- {f_name}: {desc}")
+            filed_descriptions.append(desc)
+        else:
+            field_lines.append(f"- {f_name}")
+
+    input_for_rag_search = doc + "\n"
+    input_for_rag_search += "\n".join(filed_descriptions)
+    input_for_agent_prompt = (
+        f"Заполни модель `{model.__name__}`.\n"
+        f"Описание: {doc or '—'}\n"
+        "Поля:\n" + "\n".join(field_lines)
+    )
+    return input_for_rag_search.strip(), input_for_agent_prompt.strip()
 
 if __name__ == "__main__":
 
