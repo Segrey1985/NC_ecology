@@ -52,8 +52,7 @@ class SurroundingDirection(BaseModel):
 
     cardinal_direction: str = Field(
         ...,
-        description="Сторона света",
-        examples=["с севера", "с юго-востока", "с запада"],
+        description="Сторона света. Примеры формулировок: «с севера», «с юго-востока», «с запада».",
     )
     description: str = Field(
         ...,
@@ -112,8 +111,7 @@ class Boiler(BaseModel):
     )
     burner_type: str = Field(
         ...,
-        description="Тип горелки",
-        examples=["газовой", "газомазутной"],
+        description="Тип горелки (например: газовой, газомазутной).",
     )
     burner_model: str = Field(
         ...,
@@ -150,8 +148,7 @@ class Pump(BaseModel):
     )
     operation_scheme: str = Field(
         ...,
-        description="Схема работы",
-        examples=["1 раб., 1 рез.", "1 раб."],
+        description="Схема работы (например: «1 раб., 1 рез.» или «1 раб.»).",
     )
     
     

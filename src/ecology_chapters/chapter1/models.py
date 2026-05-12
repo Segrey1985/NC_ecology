@@ -17,13 +17,11 @@ class Facility(BaseModel):
     
     type_nominative: str = Field(
         ...,
-        description="Полное наименование объекта в именительном падеже",
-        examples=["блочно-модульная газовая котельная", "котельная"],
+        description="Полное наименование объекта в именительном падеже (например: блочно-модульная газовая котельная, котельная).",
     )
     type_genitive: str = Field(
         ...,
-        description="Наименование объекта в родительном падеже",
-        examples=["котельной", "блочно-модульной газовой котельной"],
+        description="Наименование объекта в родительном падеже (например: котельной, блочно-модульной газовой котельной).",
     )
     gender: Gender = Field(
         ...,
@@ -35,13 +33,11 @@ class Facility(BaseModel):
     )
     project_goal: Optional[str] = Field(
         None,
-        description="Цель строительства/реконструкции/перевооружения",
-        examples=["перевод котельной на газообразное топливо"],
+        description="Цель строительства/реконструкции/перевооружения (например: перевод котельной на газообразное топливо).",
     )
     capacity_text: str = Field(
         ...,
-        description="Мощность объекта в текстовом формате",
-        examples=["0,8 МВт", "4,0 МВт"],
+        description="Мощность объекта в текстовом формате (например: 0,8 МВт, 4,0 МВт).",
     )
     capacity_mw: float = Field(
         ...,
@@ -57,8 +53,7 @@ class Facility(BaseModel):
     )
     heat_consumers: str = Field(
         ...,
-        description="Описание потребителей тепловой энергии",
-        examples=["многоквартирных домов и объектов социального назначения"],
+        description="Описание потребителей тепловой энергии (например: многоквартирных домов и объектов социального назначения).",
     )
 
 
@@ -72,13 +67,11 @@ class LandPlot(BaseModel):
     )
     land_category: str = Field(
         ...,
-        description="Категория земель",
-        examples=["земли населенных пунктов"],
+        description="Категория земель (например: земли населенных пунктов).",
     )
     permitted_use: str = Field(
         ...,
-        description="Вид разрешенного использования",
-        examples=["предоставление коммунальных услуг", "коммунальное обслуживание"],
+        description="Вид разрешенного использования (например: предоставление коммунальных услуг, коммунальное обслуживание).",
     )
     area_sqm: float = Field(
         ...,
@@ -86,13 +79,11 @@ class LandPlot(BaseModel):
     )
     territorial_zone: Optional[str] = Field(
         None,
-        description="Код территориальной зоны по ПЗЗ",
-        examples=["Т2Ж1", "ПР", "П2"],
+        description="Код территориальной зоны по ПЗЗ (например: Т2Ж1, ПР, П2).",
     )
     coordinate_system: Optional[str] = Field(
         None,
-        description="Система координат для поворотных точек",
-        examples=["МСК-47", "МСК-53"],
+        description="Система координат для поворотных точек (например: МСК-47, МСК-53).",
     )
     boundary_coordinates: Optional[str] = Field(
         None,
@@ -105,7 +96,7 @@ class Structures(BaseModel):
     
     structures: list[str] = Field(
         default_factory=list,
-        examples=[["здание котельной", "дымовая труба", "ограждение из 3D сварной сетки"]]
+        description="Перечень сооружений на участке. Пример элементов: здание котельной, дымовая труба, ограждение из 3D сварной сетки.",
     )
 
 
@@ -114,7 +105,7 @@ class Ownership(BaseModel):
     
     ownership: Optional[str] = Field(
         None,
-        examples=["договором аренды земельного участка № 123 от 01.01.2024"]
+        description="Формулировка права пользования участком (например: договором аренды земельного участка № 123 от 01.01.2024).",
     )
 
 
@@ -131,13 +122,11 @@ class SanitaryZone(BaseModel):
     )
     size_m: Optional[int] = Field(
         None,
-        description="Размер СЗЗ в метрах",
-        examples=[50, 100, 300, 500, 1000],
+        description="Размер СЗЗ в метрах (типичные значения: 50, 100, 300, 500, 1000).",
     )
     sanpin_reference: Optional[str] = Field(
         None,
-        description="Ссылка на конкретный пункт СанПиН",
-        examples=["гл. VII, табл. 7.1. р.10, п.10.4.1"],
+        description="Ссылка на конкретный пункт СанПиН (например: гл. VII, табл. 7.1. р.10, п.10.4.1).",
     )
 
 
@@ -150,9 +139,7 @@ class Surroundings(BaseModel):
     )
     data_sources: list[str] = Field(
         ...,
-        description="Источники данных для анализа окружения",
-        examples=[["публичная кадастровая карта (https://pkk.rosreestr.ru)",
-                   "ситуационный план размещения котельной М 1:500 (Приложение 1)"]],
+        description="Источники данных для анализа окружения. Примеры строк: публичная кадастровая карта (https://pkk.rosreestr.ru); ситуационный план размещения котельной М 1:500 (Приложение 1).",
     )
 
 
@@ -174,7 +161,7 @@ class GeneralPlan(BaseModel):
 
 
 class NearestObjects(BaseModel):
-    """"Перечень ближайших нормируемых объектов"""
+    """Перечень ближайших нормируемых объектов в радиусе нормативной санитарно-защитной зоны"""
     
     nearest_objects: list[NearestObject] = Field(
         default_factory=list,
@@ -190,13 +177,11 @@ class Architecture(BaseModel):
     )
     floors: Optional[str] = Field(
         None,
-        description="Этажность здания",
-        examples=["одноэтажное"],
+        description="Этажность здания (например: одноэтажное).",
     )
     construction_type: Optional[str] = Field(
         None,
-        description="Тип исполнения здания",
-        examples=["отдельно стоящее, кирпичное", "блочно-модульное"],
+        description="Тип исполнения здания (например: отдельно стоящее, кирпичное; блочно-модульное).",
     )
     module_count: Optional[int] = Field(
         None,
@@ -204,13 +189,11 @@ class Architecture(BaseModel):
     )
     axes: Optional[str] = Field(
         None,
-        description="Обозначение осей здания",
-        examples=["А-Б/1-4"],
+        description="Обозначение осей здания (например: А-Б/1-4).",
     )
     dimensions: str = Field(
         ...,
-        description="Габаритные размеры здания в осях",
-        examples=["7,8 x 2,35"],
+        description="Габаритные размеры здания в осях (например: 7,8 x 2,35).",
     )
     building_height_m: Optional[float] = Field(
         None,
@@ -226,8 +209,7 @@ class Architecture(BaseModel):
     )
     structural_scheme: Optional[str] = Field(
         None,
-        description="Конструктивная схема здания",
-        examples=["безкаркасная", "каркасная"],
+        description="Конструктивная схема здания (например: безкаркасная, каркасная).",
     )
     stack_count: int = Field(
         ...,
@@ -243,8 +225,7 @@ class Architecture(BaseModel):
     )
     entrance_description: Optional[str] = Field(
         None,
-        description="Описание въезда/выезда на промплощадку",
-        examples=["с северо-западной стороны"],
+        description="Описание въезда/выезда на промплощадку (например: с северо-западной стороны).",
     )
 
 
@@ -253,23 +234,19 @@ class HeatSupply(BaseModel):
     
     operation_mode: str = Field(
         ...,
-        description="Режим работы",
-        examples=["круглосуточно, отопительный период"],
+        description="Режим работы (например: круглосуточно, отопительный период).",
     )
     system_type: str = Field(
         ...,
-        description="Тип системы теплоснабжения",
-        examples=["2-х трубная, закрытая"],
+        description="Тип системы теплоснабжения (например: 2-х трубная, закрытая).",
     )
     heat_carrier: str = Field(
         ...,
-        description="Теплоноситель",
-        examples=["вода"],
+        description="Теплоноситель (например: вода).",
     )
     temperature_schedule: str = Field(
         ...,
-        description="Температурный график",
-        examples=["95/70 °С", "105/80 °С"],
+        description="Температурный график (например: 95/70 °С, 105/80 °С).",
     )
 
 
@@ -294,8 +271,7 @@ class Fuel(BaseModel):
     
     primary_fuel: str = Field(
         ...,
-        description="Вид основного топлива",
-        examples=["природный газ"],
+        description="Вид основного топлива (например: природный газ).",
     )
     calorific_value: Optional[float] = Field(
         None,
@@ -415,8 +391,7 @@ class Ventilation(BaseModel):
     )
     louver_size: Optional[str] = Field(
         None,
-        description="Размер жалюзийных решеток",
-        examples=["2400 х 1200 мм"],
+        description="Размер жалюзийных решеток (например: 2400 х 1200 мм).",
     )
     deflector_diameter_mm: Optional[int] = Field(
         None,
