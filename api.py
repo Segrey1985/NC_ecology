@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from main import main as run_main
 from src.utils.validators import validate_docx, validate_json, validate_zip
+from src.utils.logger import logger
 
 app = FastAPI(title="NC_ecology API", version="0.1.0")
 
@@ -50,10 +51,8 @@ async def generate(
         tmp_dir = Path(tmp)
         input_dir = tmp_dir / "in"
         output_dir = tmp_dir / "out"
-        project_parts_dir = tmp_dir / "project_parts"
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-        project_parts_dir.mkdir(parents=True, exist_ok=True)
 
         placeholders_path = input_dir / "placeholders.json"
         placeholders_bytes = await placeholders.read()
@@ -81,8 +80,11 @@ async def generate(
         if template_docx:
             template_docx_path = input_dir / "template.docx"
             template_docx_path.write_bytes(await template_docx.read())
-
+        
+        project_parts_dir: Path | None = None
         if project_parts_zip:
+            project_parts_dir = tmp_dir / "project_parts"
+            project_parts_dir.mkdir(parents=True, exist_ok=True)
             # Распаковываем project_parts_zip и собираем PDFs в директорию,
             # которую ожидает collect_project_parts (она смотрит только верхний уровень).
             project_parts_zip_bytes = await project_parts_zip.read()
@@ -108,7 +110,14 @@ async def generate(
                 if dest.exists():
                     dest = project_parts_dir / f"{idx:04d}_{safe_name}"
                 shutil.copy2(pdf_path, dest)
-
+        
+        logger.info(f"{template_docx_path=}")
+        logger.info(f"{placeholders_path=}")
+        logger.info(f"{table_placeholders_path=}")
+        logger.info(f"{project_parts_dir=}")
+        logger.info(f"{output_dir=}")
+        logger.info(f"{collection_name=}")
+        
         run_main(
             template_docx_path=template_docx_path,
             placeholders_path=placeholders_path,
@@ -117,7 +126,7 @@ async def generate(
             output_path=output_dir,
             collection_name=collection_name,
             verbose=False,
-            test_mode=False,
+            test_mode='off',
         )
 
         zip_buf = io.BytesIO()
