@@ -4,7 +4,7 @@ import sys
 logger_format = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
     "<level>{level: <8}</level> | "
-    "<level>{name}</level>:<black>{function}</black>:<black>{line}</black> | <level>{message}</level>"
+    "<level>{name}</level>:{function}:{line} | <level>{message}</level>"
 )
 logger.remove()
 logger.add(sys.stdout, format=logger_format, colorize=True)
