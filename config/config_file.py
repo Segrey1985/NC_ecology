@@ -1,8 +1,8 @@
 import warnings
-from typing import Literal
 import torch
 import pathlib
 from pathlib import Path
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.utils.logger import logger
@@ -15,13 +15,19 @@ warnings.filterwarnings(
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 models = {
+    # clade
     "claude": "claude-sonnet-4.6",
+    
+    # gemini
     "gemini3.1pro": "gemini-3.1-pro-preview",
-    "gpt54mini": "gpt-5.4-mini",
-    "gemini3.1flash": "gemini-3.1-flash-lite-preview",
-    "glm5": "glm-5",
     "flash": "gemini-3-flash-preview",
+    
+    # gpt
     "gpt5.1": "gpt-5.1",
+    "gpt54mini": "gpt-5.4-mini",
+    
+    # other
+    "glm5": "glm-5",
 }
 
 
