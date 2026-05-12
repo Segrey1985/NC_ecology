@@ -70,62 +70,62 @@ def main(
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock"] = "on",
 ):
-
-    graph = init_graph(
-        collection_name=collection_name, project_parts_path=project_parts_path
-    )
-
-    placeholders, table_placeholders = _load_placeholders(
-        placeholders_path, table_placeholders_path
-    )
-
-    if test_mode == "mock":
-        placeholders_output = json.load(
-            open(
-                "data/mock/placeholders_output.json",
-                encoding="utf-8",
-            )
+    try:
+        graph = init_graph(
+            collection_name=collection_name, project_parts_path=project_parts_path
         )
-    else:
-        placeholders_output = {}
-
-        for key, value in table_placeholders.items():
-            placeholders_output[key] = value
-
-        for placeholder, placeholder_info in placeholders.items():
-            input_for_rag_search = placeholder_info["for_rag_search"]
-            input_for_agent_prompt = placeholder_info["for_agent_prompt"]
-            final_content = _run_graph(
-                graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
-            )
-            placeholders_output[placeholder] = json.loads(final_content).get(
-                "answer", "__empty__"
-            )
-            if test_mode == "on":
-                break
-
-    qdrant_service = PARAMS.qdrant_service
-    if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
-        collection_name
-    ):
-        qdrant_service.client.delete_collection(collection_name)
-        logger.info(
-            f"collection <{collection_name}> name is valid uuid and was deleted"
+    
+        placeholders, table_placeholders = _load_placeholders(
+            placeholders_path, table_placeholders_path
         )
-
-    if output_path:
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        placeholders_out_path = output_path / "placeholders.json"
-        with open(placeholders_out_path, "w", encoding="utf-8") as f:
-            json.dump(placeholders_output, f, ensure_ascii=False, indent=4)
-
-        if template_docx_path:
-            result_template_out_path = output_path / "result_template.docx"
-            fill_docx_template(
-                template_path=template_docx_path,
-                data=placeholders_output,
-                output_docx_path=result_template_out_path,
+    
+        if test_mode == "mock":
+            placeholders_output = json.load(
+                open(
+                    "data/mock/placeholders_output.json",
+                    encoding="utf-8",
+                )
+            )
+        else:
+            placeholders_output = {}
+    
+            for key, value in table_placeholders.items():
+                placeholders_output[key] = value
+    
+            for placeholder, placeholder_info in placeholders.items():
+                input_for_rag_search = placeholder_info["for_rag_search"]
+                input_for_agent_prompt = placeholder_info["for_agent_prompt"]
+                final_content = _run_graph(
+                    graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
+                )
+                placeholders_output[placeholder] = json.loads(final_content).get(
+                    "answer", "__empty__"
+                )
+                if test_mode == "on":
+                    break
+    
+        if output_path:
+            output_path.mkdir(parents=True, exist_ok=True)
+    
+            placeholders_out_path = output_path / "placeholders.json"
+            with open(placeholders_out_path, "w", encoding="utf-8") as f:
+                json.dump(placeholders_output, f, ensure_ascii=False, indent=4)
+    
+            if template_docx_path:
+                result_template_out_path = output_path / "result_template.docx"
+                fill_docx_template(
+                    template_path=template_docx_path,
+                    data=placeholders_output,
+                    output_docx_path=result_template_out_path,
+                )
+    finally:
+        qdrant_service = PARAMS.qdrant_service
+        if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
+            collection_name
+        ):
+            qdrant_service.client.delete_collection(collection_name)
+            logger.info(
+                f"collection <{collection_name}> name is valid uuid and was deleted"
             )
 
 
