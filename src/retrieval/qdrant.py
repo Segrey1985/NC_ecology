@@ -2,9 +2,11 @@ import json
 import uuid
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Filter, FieldCondition, MatchAny
 
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -54,24 +56,47 @@ class QdrantService:
             logger.info(f"Created collection {collection_name}.")
 
     def add_points_to_collection(
-        self, collection_name: str, points: list[PointStruct]
+        self, collection_name: str, points: list[PointStruct], batch_size=32
     ) -> None:
-        self.client.upsert(collection_name=collection_name, wait=True, points=points)
-
-    def run_query(self, query: str, collection_name: str, limit: int = 3):
+        for i in range(0, len(points), batch_size):
+            batch = points[i : i + batch_size]
+            self.client.upsert(collection_name=collection_name, wait=True, points=batch)
+    
+    # part_names = ['ПЗ', 'ПЗУ', 'АР', 'КР', 'ИОС', 'Система электроснабжения', 'Система водоснабжения', 'Система водоотведения',
+    #  'Отопление, вентиляция и кондиционирование воздуха, тепловые сети', 'Сети связи', 'Система газоснабжения']
+    
+    def run_query(
+        self,
+        query: str,
+        collection_name: str,
+        limit: int = 3,
+        part_names: list[str] | None = None,
+    ) -> list[PointStruct]:
         """
         Выполняет векторный поиск по коллекции.
 
-        Важно: если эмбеддинги не удаётся получить (например, из-за проблем с внешним API),
-        не "роняем" весь агент, а возвращаем пустой результат. Это позволяет пайплайну
-        корректно отработать дальше (с пустым контекстом) и показать причину на уровне LLM-check.
+        Примечание: если эмбеддинги не удаётся получить (например, из-за проблем с внешним API),
+        возвращаем пустой результат. Это позволяет пайплайну корректно отработать дальше (с пустым контекстом)
+        и показать причину.
         """
         try:
             vector = self.model.encode([query])
+            parts_filter = None
+            if part_names:
+                parts_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="part_name",
+                            match=MatchAny(any=part_names)
+                        )
+                    ]
+                )
+            
             search_result = self.client.query_points(
                 collection_name=collection_name,
                 query=vector[0],
                 limit=limit,
+                query_filter=parts_filter,
             ).points
             return search_result
         except Exception:
@@ -93,20 +118,8 @@ def build_qdrant_service() -> QdrantService:
 
 class ProjectPart:
     """Класс описывающий смежный раздел проектной документации (АР, КР, ИОС ...)"""
-
-    NAME_BY_NUMBER = {
-        "1": "ПЗ",
-        "2": "ПЗУ",
-        "3": "АР",
-        "4": "OK",
-        "5": "ИОС",
-        "5.1": "Система электроснабжения",
-        "5.2": "Система водоснабжения",
-        "5.3": "Система водоотведения",
-        "5.4": "Отопление, вентиляция и кондиционирование воздуха, тепловые сети",
-        "5.5": "Сети связи",
-        "5.6": "Система газоснабжения",
-    }
+    
+    DISCIPLINE_BY_NUMBER = cfg.DISCIPLINE_BY_NUMBER
 
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
@@ -164,7 +177,9 @@ class ProjectPart:
         else:
             part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
         payload["part_number"] = part_number
-        payload["part_name"] = self.NAME_BY_NUMBER[part_number]
+        payload["part_name"] = self.DISCIPLINE_BY_NUMBER.get(
+            part_number, self.DISCIPLINE_BY_NUMBER["прочее"]
+        )
 
     def _payload_add_text(self, base: dict) -> list[dict]:
         return [{**base, "text": chunk} for chunk in self.chunks]
@@ -208,10 +223,17 @@ def _collect_project_parts(folder_path: Path) -> list[ProjectPart]:
 
 def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
     """Собирает все .pdf файлы в директории, превращает их в list[ProjectPart] и вычисляет Point для qdrant"""
-    project_parts = _collect_project_parts(project_parts_path)
-    for project_part in project_parts:
-        project_part.run()
-        logger.debug(f"project_part <{project_part.file_path.name}> сформирован.")
+    project_parts: list[ProjectPart] = _collect_project_parts(project_parts_path)
+
+    def _run(part: ProjectPart) -> None:
+        part.run()
+        logger.debug(f"project_part <{part.file_path.name}> сформирован.")
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(_run, part) for part in project_parts]
+        for f in as_completed(futures):
+            f.result()  # пробрасываем исключения
+
     return project_parts
 
 
@@ -235,14 +257,13 @@ def fill_collection(
 
 if __name__ == "__main__":
 
-    from config.config_file import cfg
-    
-    base = cfg.BASE_DIR
-    pp = ProjectPart(file_path=base / "data" / "IN" / "project1" / "1_ОК.17.24СТ-ПЗ.pdf")
+    pp = ProjectPart(
+        file_path=cfg.BASE_DIR / "data" / "IN" / "project1" / "1_ОК.17.24СТ-ПЗ.pdf"
+    )
     print(pp)
     pp.extract_text()
     pp.make_chunks()
-    
+
     for chunk in pp.chunks:
         print(chunk)
-        print(f'---------------  {len(chunk)}  ---------------')
+        print(f"---------------  {len(chunk)}  ---------------")
