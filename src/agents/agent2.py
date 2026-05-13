@@ -20,6 +20,7 @@ from src.retrieval.reranker import rerank_chunks
 from src.utils.logger import logger
 from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
+from src.ecology_chapters.chapter1.rag_map import get_part_names_for_model
 
 
 class GraphParams:
@@ -55,7 +56,9 @@ class Agent2State(TypedDict):
     rewrite_count: int
 
 
-def _search_in_related_disciplines(query: str) -> list[str]:
+def _search_in_related_disciplines(
+    query: str, output_model: type[BaseModel] | None
+) -> list[str]:
     qdrant_service = PARAMS_2.qdrant_service
     collection_name = PARAMS_2.collection_name
     if qdrant_service is None or collection_name is None:
@@ -63,8 +66,12 @@ def _search_in_related_disciplines(query: str) -> list[str]:
             "Qdrant не инициализирован. Сначала вызовите init_graph_2()."
         )
 
+    part_names = get_part_names_for_model(output_model)
     relevant_points = qdrant_service.run_query(
-        query, collection_name=collection_name, limit=30
+        query,
+        collection_name=collection_name,
+        limit=30,
+        part_names=part_names,
     )
     texts = [point.payload["text"] for point in relevant_points]
     reranked = rerank_chunks(query, texts)[0:5]
@@ -73,7 +80,7 @@ def _search_in_related_disciplines(query: str) -> list[str]:
 
 def rag_search_node(state: Agent2State) -> Agent2State:
     rag_query = state.get("rag_query") or state["input_query"]
-    chunks = _search_in_related_disciplines(rag_query)
+    chunks = _search_in_related_disciplines(rag_query, state.get("output_model"))
     rag_context = format_rag_context(chunks)
     logger.info(f"[agent_2] RAG search completed for query: {rag_query}")
     return {"rag_query": rag_query, "rag_context": rag_context}
