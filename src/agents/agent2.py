@@ -55,7 +55,7 @@ class Agent2State(TypedDict):
     rewrite_count: int
 
 
-def _search_in_related_disciplines(
+def _rag_search_and_rerank(
     rag_prompt: str,
     reranker_prompt: str,
     output_model: type[BaseModel] | None,
@@ -157,7 +157,7 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
 def rag_search_node(state: Agent2State) -> Agent2State:
     rag_prompt = state["rag_prompt"]
     reranker_prompt = state["reranker_prompt"]
-    chunks = _search_in_related_disciplines(
+    chunks = _rag_search_and_rerank(
         rag_prompt, reranker_prompt, state.get("output_model")
     )
     rag_context = format_rag_context(chunks)
