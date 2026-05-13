@@ -364,28 +364,24 @@ def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
     return candidates[0]
 
 
-def build_inputs_for_model(model: type[BaseModel]) -> tuple[str, str]:
+def build_input_query(model: type[BaseModel]) -> str:
+    """Генерация input_query на основе pydantic-класса."""
     doc = (inspect.getdoc(model) or "").strip()
     fields = getattr(model, "model_fields", {}) or {}
 
     field_lines: list[str] = []
-    filed_descriptions: list[str] = []
     for f_name, f_info in fields.items():
         desc = getattr(f_info, "description", None)
         if desc:
             field_lines.append(f"- {f_name}: {desc}")
-            filed_descriptions.append(desc)
         else:
             field_lines.append(f"- {f_name}")
 
-    input_for_rag_search = doc + "\n"
-    input_for_rag_search += "\n".join(filed_descriptions)
-    input_for_agent_prompt = (
+    return (
         f"Заполни модель `{model.__name__}`.\n"
         f"Описание: {doc or '—'}\n"
         "Поля:\n" + "\n".join(field_lines)
-    )
-    return input_for_rag_search.strip(), input_for_agent_prompt.strip()
+    ).strip()
 
 if __name__ == "__main__":
 

@@ -15,15 +15,14 @@ from src.utils.utils import (
     is_valid_uuid4_hex,
     iter_models_from_module,
     pick_assembly_model,
-    build_inputs_for_model,
+    build_input_query,
 )
 from src.templates.docx_template_engine import fill_docx_template
 
 
 def _run_graph(
     graph,
-    input_for_rag_search: str,
-    input_for_agent_prompt: str,
+    input_query: str,
     output_model: type[BaseModel],
     verbose: bool = True,
 ) -> str:
@@ -34,8 +33,7 @@ def _run_graph(
     final_content = ""
     for chunk in graph.stream(
         input={
-            "input_query": input_for_rag_search,
-            "input_for_agent_prompt": input_for_agent_prompt,
+            "input_query": input_query,
             "output_model": output_model,
         },
         stream_mode="updates",
@@ -54,12 +52,10 @@ def _run_graph(
 def thread_run_graph_for_model(
     graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
 ):
-    input_for_rag_search, input_for_agent_prompt = build_inputs_for_model(model)
 
     final_content = _run_graph(
         graph,
-        input_for_rag_search=input_for_rag_search,
-        input_for_agent_prompt=input_for_agent_prompt,
+        input_query=build_input_query(model),
         output_model=model,
         verbose=verbose,
     )
@@ -177,7 +173,7 @@ if __name__ == "__main__":
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter1",
-        collection_name="main",
+        collection_name="all",
         test_mode="off",
         max_workers=8,
     )
