@@ -1,7 +1,8 @@
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Literal, Optional, TypedDict
+from operator import add
+from typing import Any, Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
@@ -42,6 +43,7 @@ class Agent2State(TypedDict):
     # rag
     rag_prompt: str
     rag_context: str
+    rag_contexts: Annotated[list[str], add]
     reranker_prompt: str
 
     # agent_node (output_model — класс pydantic-схемы для structured output)
@@ -215,7 +217,7 @@ def answer_node(state: Agent2State) -> Agent2State:
         current_response = llm.with_structured_output(output_model, strict=True).invoke(messages)
         new_answer = current_response.model_dump_json()
         updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
-        return {"answer": updated_answer}
+        return {"answer": updated_answer, "rag_contexts": [rag_context]}
     
     except Exception:
         # structured_output может падать на несовпадении типов (pydantic ValidationError).
@@ -250,13 +252,13 @@ def answer_node(state: Agent2State) -> Agent2State:
             )
             new_answer = response_json
             updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
-            return {"answer": updated_answer}
+            return {"answer": updated_answer, "rag_contexts": [rag_context]}
         except Exception:
             logger.exception(
                 "Structured output validation failed in answer_node in fallback №1. "
                 "Doing fallback №2 and return empty dict"
             )
-            return {"answer": "{}"}
+            return {"answer": "{}", "rag_contexts": [rag_context]}
 
 
 class AnswerCheck(BaseModel):
@@ -277,7 +279,7 @@ class AnswerCheck(BaseModel):
 def check_node(state: Agent2State) -> Agent2State:
     llm = PARAMS_2.llm
     input_query = state["input_query"]
-    rag_context = state["rag_context"]
+    rag_contexts = state["rag_contexts"]
     answer = state["answer"]
     
     system_message = SystemMessage(
@@ -291,7 +293,7 @@ def check_node(state: Agent2State) -> Agent2State:
         HumanMessage(
             content=(
                 f"Задача (что нужно извлечь):\n{input_query}\n\n"
-                f"RAG-контекст:\n{rag_context}\n\n"
+                f"RAG-контекст:\n{'\n'.join(rag_contexts)}\n\n"
                 f"Ответ (JSON):\n{answer}"
             )
         ),
