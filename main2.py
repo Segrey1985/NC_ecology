@@ -70,7 +70,7 @@ def _log_thread():
 
 def thread_run_graph_for_model(
     graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
-):
+) -> dict:
     handler_id, log_lines = _log_thread()
     
     try:
@@ -80,11 +80,12 @@ def thread_run_graph_for_model(
             output_model=model,
             verbose=verbose,
         )
-        return (
-            model.__name__,
-            json.loads(final_content) if final_content else {},
-            log_lines,
-        )
+        return {
+            "model": model,
+            "model_name": model.__name__,
+            "result": json.loads(final_content) if final_content else {},
+            "logs_lines": log_lines,
+        }
     finally:
         logger.remove(handler_id)
 
@@ -106,7 +107,7 @@ def main(
             collection_name=collection_name, project_parts_path=project_parts_path
         )
         
-        total_results = []
+        total_results: list[dict] = []
     
         if test_mode == "mock":
             results = json.load(
@@ -147,15 +148,15 @@ def main(
                 ]
     
                 for future in as_completed(futures):
-                    model_name, result, log_lines = future.result()
-                    results[model_name] = result
-                    total_results.append(future.result())
+                    dct = future.result()
+                    results[dct["model_name"]] = dct["result"]
+                    total_results.append(dct)
     
         # print results
         
         for t in total_results:
-            mode_name, result, log_lines = t
-            print(f"\n--- Логи потока {mode_name} ({len(log_lines)} записей) ---")
+            model_name, result, log_lines = t['model_name'], t['result'], t['logs_lines']
+            print(f"\n--- Логи потока {model_name} ({len(log_lines)} записей) ---")
             for line in log_lines:
                 print(line)
             print("--- конец логов потока ---\n")
