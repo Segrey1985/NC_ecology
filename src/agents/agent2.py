@@ -169,10 +169,30 @@ def rag_search_node(state: Agent2State) -> Agent2State:
 
 
 def answer_node(state: Agent2State) -> Agent2State:
+
+    def update_previous_answer_with_new_answer(previous_answer: str | None, new_answer: str) -> str:
+        """Возвращает прошлый ответ, обновленный текущим ответом"""
+        
+        def _select_fields_to_update(previous_answer: str) -> list[str]:
+            dct = json.loads(previous_answer)
+            fields_to_update = [k for k, v in dct.items() if bool(v) is False]
+            return fields_to_update
+        
+        if previous_answer:
+            updated_answer = json.loads(previous_answer)  # начинаем обновлять прошлый ответ
+            new_answer = json.loads(new_answer)
+            fields_to_update = _select_fields_to_update(previous_answer)
+            for field in fields_to_update:
+                updated_answer[field] = new_answer[field]
+            return json.dumps(updated_answer, ensure_ascii=False)
+        else:
+            return new_answer
+    
     llm = PARAMS_2.llm
     input_query = state["input_query"]
     rag_context = state["rag_context"]
     output_model = state["output_model"]
+    previous_answer = state.get("answer")
 
     system_message = SystemMessage(
         "Ты помощник по извлечению данных по строительному проекту.\n"
@@ -192,9 +212,10 @@ def answer_node(state: Agent2State) -> Agent2State:
     ]
     
     try:
-        response = llm.with_structured_output(output_model, strict=True).invoke(messages)
-        response_json = response.model_dump_json()
-        return {"answer": response_json}
+        current_response = llm.with_structured_output(output_model, strict=True).invoke(messages)
+        new_answer = current_response.model_dump_json()
+        updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
+        return {"answer": updated_answer}
     
     except Exception:
         # structured_output может падать на несовпадении типов (pydantic ValidationError).
@@ -224,8 +245,12 @@ def answer_node(state: Agent2State) -> Agent2State:
                     ),
                 ]
             )
-            response_json = validate_and_dump_json_str(state['output_model'], str(getattr(raw, "content", raw)))
-            return {"answer": response_json}
+            response_json = validate_and_dump_json_str(
+                state['output_model'], str(getattr(raw, "content", raw))
+            )
+            new_answer = response_json
+            updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
+            return {"answer": updated_answer}
         except Exception:
             logger.exception(
                 "Structured output validation failed in answer_node in fallback №1. "
@@ -277,6 +302,7 @@ def check_node(state: Agent2State) -> Agent2State:
         "check_decision": check.decision,
         "check_reason": check.reason,
         "rewrite_focus": check.rewrite_focus or "",
+        "output_model": state["output_model"]  # для логов
     }
 
 
