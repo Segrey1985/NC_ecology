@@ -60,11 +60,7 @@ def _log_thread():
     def _capture_sink(message) -> None:
         log_lines.append(message.strip())
 
-    handler_id = logger.add(
-        _capture_sink,
-        filter=_only_this_thread,
-        colorize=True
-    )
+    handler_id = logger.add(_capture_sink, filter=_only_this_thread, colorize=True)
     return handler_id, log_lines
 
 
@@ -72,7 +68,7 @@ def thread_run_graph_for_model(
     graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
 ) -> dict:
     handler_id, log_lines = _log_thread()
-    
+
     try:
         final_content = _run_graph(
             graph,
@@ -102,13 +98,13 @@ def main(
 ):
     try:
         # init graph
-        
+
         graph = init_graph_2(
             collection_name=collection_name, project_parts_path=project_parts_path
         )
-        
+
         total_results: list[dict] = []
-    
+
         if test_mode == "mock":
             results = json.load(
                 open(
@@ -117,9 +113,9 @@ def main(
                 )
             )
         else:
-    
+
             # get models from module
-    
+
             models_module_path = chapter_module_path + ".models"
             models = iter_models_from_module(models_module_path)
             if not models:
@@ -128,14 +124,14 @@ def main(
                 )
             if test_mode == "on":
                 models = models[:1]
-    
+
             # run thread_run_graph_for_model in ThreadPoolExecutor
-    
+
             if max_workers is None:
                 max_workers = min(4, max(1, len(models)))
-    
+
             results: dict[str, object] = {model.__name__: None for model in models}
-    
+
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
@@ -146,30 +142,31 @@ def main(
                     )
                     for model in models
                 ]
-    
+
                 for future in as_completed(futures):
                     dct = future.result()
                     results[dct["model_name"]] = dct["result"]
                     total_results.append(dct)
-    
+
         # print results
-        
+
         for t in total_results:
-            model_name, result, log_lines = t['model_name'], t['result'], t['logs_lines']
+            model_name = t["model_name"]
+            log_lines = t["logs_lines"]
             print(f"\n--- Логи потока {model_name} ({len(log_lines)} записей) ---")
             for line in log_lines:
                 print(line)
             print("--- конец логов потока ---\n")
-        
+
         # export results
-        
+
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-    
+
             results_out_path = output_path / "chapter1_models_output.json"
             with open(results_out_path, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
-    
+
             if template_docx_path:
                 assembly_module_path = chapter_module_path + ".assembly"
                 assembly_model = pick_assembly_model(assembly_module_path)
@@ -185,8 +182,10 @@ def main(
                 )
     finally:
         qdrant_service = PARAMS_2.qdrant_service
-        if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
-            collection_name
+        if (
+            qdrant_service
+            and qdrant_service.client.collection_exists(collection_name)
+            and is_valid_uuid4_hex(collection_name)
         ):
             qdrant_service.client.delete_collection(collection_name)
             logger.info(
