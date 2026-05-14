@@ -1,5 +1,6 @@
 import json
 import uuid
+import threading
 from pathlib import Path
 from typing import Literal
 
@@ -49,21 +50,43 @@ def _run_graph(
     return final_content
 
 
+def _log_thread():
+    log_lines = []
+    thread_ident = threading.get_ident()
+
+    def _only_this_thread(record) -> bool:
+        return record["thread"].id == thread_ident
+
+    def _capture_sink(message) -> None:
+        log_lines.append(message.strip())
+
+    handler_id = logger.add(
+        _capture_sink,
+        filter=_only_this_thread,
+        colorize=True
+    )
+    return handler_id, log_lines
+
+
 def thread_run_graph_for_model(
     graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
 ):
-
-    final_content = _run_graph(
-        graph,
-        input_query=build_input_query(model),
-        output_model=model,
-        verbose=verbose,
-    )
-
-    return (
-        model.__name__,
-        json.loads(final_content) if final_content else {},
-    )
+    handler_id, log_lines = _log_thread()
+    
+    try:
+        final_content = _run_graph(
+            graph,
+            input_query=build_input_query(model),
+            output_model=model,
+            verbose=verbose,
+        )
+        return (
+            model.__name__,
+            json.loads(final_content) if final_content else {},
+            log_lines,
+        )
+    finally:
+        logger.remove(handler_id)
 
 
 def main(
@@ -82,6 +105,8 @@ def main(
         graph = init_graph_2(
             collection_name=collection_name, project_parts_path=project_parts_path
         )
+        
+        total_results = []
     
         if test_mode == "mock":
             results = json.load(
@@ -122,9 +147,19 @@ def main(
                 ]
     
                 for future in as_completed(futures):
-                    model_name, result = future.result()
+                    model_name, result, log_lines = future.result()
                     results[model_name] = result
+                    total_results.append(future.result())
     
+        # print results
+        
+        for t in total_results:
+            mode_name, result, log_lines = t
+            print(f"\n--- Логи потока {mode_name} ({len(log_lines)} записей) ---")
+            for line in log_lines:
+                print(line)
+            print("--- конец логов потока ---\n")
+        
         # export results
         
         if output_path:
