@@ -150,7 +150,7 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
     agent2.PARAMS_2.qdrant_service = FakeQdrant()
     agent2.PARAMS_2.collection_name = "main"
 
-    monkeypatch.setattr(agent2, "rerank_chunks", lambda _q, texts: [(texts[0], 1.0)])
+    monkeypatch.setattr(agent2, "rerank_chunks", lambda _q, texts, **kwargs: [(texts[0], 1.0)])
     monkeypatch.setattr(agent2, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
     chunks = agent2._rag_search_and_rerank("qq", "qq", output_model=Out)

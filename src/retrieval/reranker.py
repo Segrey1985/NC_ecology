@@ -1,4 +1,5 @@
 import os
+import requests
 import threading
 from pathlib import Path
 from numpy import ndarray
@@ -6,7 +7,7 @@ from functools import lru_cache
 from sentence_transformers import CrossEncoder
 
 from src.utils.logger import logger
-from config.config_file import cfg
+from config.config_file import cfg, rerankers_list
 from src.retrieval.qdrant import ProjectPart
 
 # model_name = "BAAI/bge-reranker-base"
@@ -15,7 +16,7 @@ from src.retrieval.qdrant import ProjectPart
 # model_name = "qilowoq/bge-reranker-v2-m3-en-ru"
 
 
-def load_local_reranker(reranker_model: str):
+def _load_local_reranker(reranker_model: str):
     models_dir = cfg.BASE_DIR / "data" / "__local_models"
     model_name_str = reranker_model.replace("/", "_")
     model_path = models_dir / model_name_str
@@ -37,35 +38,64 @@ _reranker_init_lock = threading.Lock()
 
 
 @lru_cache(maxsize=2)
-def get_reranker(reranker_model: str) -> CrossEncoder:
+def _get_local_reranker(reranker_model: str) -> CrossEncoder:
     with _reranker_init_lock:
-        return load_local_reranker(reranker_model)
+        return _load_local_reranker(reranker_model)
 
 
-def rerank_chunks(
+def rerank_with_local_reranker(
+    model_name: str,
     query: str,
     chunks: list[str],
     *,
-    top_k: int | None = None,
+    top_n: int | None = 5,
     batch_size: int = 32,
 ) -> list[tuple[str, float]]:
-    
+
     if not chunks:
         return []
-    
-    model = get_reranker(cfg.RERANKER_MODEL)
+
+    model = _get_local_reranker(model_name)
     logger.debug(f"[reranker] Re-ranking start.")
 
     pairs = [(query, chunk) for chunk in chunks]
     scores: ndarray = model.predict(pairs, batch_size=batch_size)
 
     order = scores.argsort()[::-1]
-    if top_k is not None:
-        order = order[:top_k]
+    if top_n is not None:
+        order = order[:top_n]
     reranked = [(chunks[i], scores[i]) for i in order]
-    logger.debug(f"[reranker] Re-ranking complete.")
-    
+    logger.debug(f"[local_reranker] Re-ranking complete.")
+
     return reranked
+
+
+def rerank_with_api(
+    model_name: str, query: str, chunks: list[str], *, top_n: int = 5
+) -> list[tuple[str, float]]:
+    response = requests.post(
+        "https://api.aitunnel.ru/v1/rerank",
+        headers={
+            "Authorization": f"Bearer {cfg.AI_TUNNEL_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={"model": model_name, "query": query, "documents": chunks, "top_n": top_n},
+    )
+    reranked = [
+        (x["document"]["text"], x["relevance_score"])
+        for x in response.json()["results"]
+    ]
+    logger.debug(f"[api reranker] Re-ranking complete.")
+    return reranked
+
+
+def rerank_chunks(query: str, chunks: list[str], *, top_n: int = 5) -> list[tuple[str, float]]:
+    model = cfg.RERANKER_MODEL
+    is_local = rerankers_list[model]["is_local"]
+    if is_local:
+        return rerank_with_local_reranker(model_name=model, query=query, chunks=chunks, top_n=top_n)
+    else:
+        return rerank_with_api(model_name=model, query=query, chunks=chunks, top_n=top_n)
 
 
 if __name__ == "__main__":
@@ -75,10 +105,16 @@ if __name__ == "__main__":
         )
     )
     project_part.run()
-
     chunks = project_part.chunks
-    query = "Наименование объекта"
+    
+    query = "Наименование объекта строительства"
 
+    reranked = rerank_chunks(query, chunks)
+    for r in reranked:
+        print(r)
+        
+    cfg.RERANKER_MODEL = "qilowoq/bge-reranker-v2-m3-en-ru"
+    
     reranked = rerank_chunks(query, chunks)
     for r in reranked:
         print(r)

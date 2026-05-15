@@ -76,7 +76,7 @@ def _rag_search_and_rerank(
         part_names=part_names,
     )
     texts = [point.payload["text"] for point in relevant_points]
-    reranked = rerank_chunks(reranker_prompt, texts)[0:5]
+    reranked = rerank_chunks(reranker_prompt, texts, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 

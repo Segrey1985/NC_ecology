@@ -30,6 +30,11 @@ models = {
     "glm5": "glm-5",
 }
 
+rerankers_list = {
+    "qilowoq/bge-reranker-v2-m3-en-ru": {"is_local": True},
+    "rerank-4-pro": {"is_local": False}
+}
+
 
 class Config(BaseSettings):
     HF_TOKEN: str
@@ -46,7 +51,7 @@ class Config(BaseSettings):
     EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
     EMBEDDINGS_LOCAL: bool = False
     QDRANT_URL: str = "http://localhost:6333"
-    RERANKER_MODEL: str = "qilowoq/bge-reranker-v2-m3-en-ru"
+    RERANKER_MODEL: str = "rerank-4-pro"
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
 

@@ -71,7 +71,7 @@ def search_in_related_disciplines(query: str) -> list[str]:
         query, collection_name=collection_name, limit=30
     )
     texts = [point.payload["text"] for point in relevant_points]
-    reranked = rerank_chunks(query, texts)[0:5]
+    reranked = rerank_chunks(query, texts, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 
