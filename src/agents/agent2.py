@@ -1,8 +1,7 @@
 import json
-import uuid
 from pathlib import Path
 from operator import add
-from typing import Any, Literal, Optional, TypedDict, Annotated
+from typing import Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
@@ -16,6 +15,12 @@ from src.retrieval.qdrant import (
     create_collection,
     create_project_parts,
     fill_collection,
+)
+from src.retrieval.query_expansion_retrieval import (
+    chunks_to_texts,
+    deduplicate_chunks,
+    merge_retrieval_results,
+    multiple_retrieval,
 )
 from src.retrieval.reranker import rerank_chunks
 from src.utils.logger import logger
@@ -41,7 +46,7 @@ class Agent2State(TypedDict):
     input_query: str
 
     # rag
-    rag_prompt: str
+    rag_prompts: list[str]
     rag_context: str
     rag_contexts: Annotated[list[str], add]
     reranker_prompt: str
@@ -58,7 +63,7 @@ class Agent2State(TypedDict):
 
 
 def _rag_search_and_rerank(
-    rag_prompt: str,
+    rag_prompts: list[str],
     reranker_prompt: str,
     output_model: type[BaseModel] | None,
 ) -> list[str]:
@@ -68,21 +73,29 @@ def _rag_search_and_rerank(
         raise RuntimeError(
             "Qdrant не инициализирован. Сначала вызовите init_graph_2()."
         )
-    part_names = get_part_names_for_model(output_model)
-    relevant_points = qdrant_service.run_query(
-        rag_prompt,
-        collection_name=collection_name,
+
+    queries = [q.strip() for q in rag_prompts if q and q.strip()]
+    if not queries:
+        return []
+
+    per_query = multiple_retrieval(
+        queries,
+        qdrant_service,
+        collection_name,
         limit=50,
-        part_names=part_names,
+        part_names=get_part_names_for_model(output_model),
     )
-    texts = [point.payload["text"] for point in relevant_points]
+    merged = merge_retrieval_results(per_query)
+    unique = deduplicate_chunks(merged)
+    texts = chunks_to_texts(unique)
+    if not texts:
+        return []
+    
     reranked = rerank_chunks(reranker_prompt, texts, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 
-class RetrievalPrompts(BaseModel):
-    """Промпты для retrieval-этапа: dense retrieval и cross-encoder reranking."""
-
+class RagPrompt(BaseModel):
     rag_prompt: str = Field(
         ...,
         description=(
@@ -91,6 +104,21 @@ class RetrievalPrompts(BaseModel):
             "типовые формулировки из проектной документации, СП, ГОСТ и других "
             "источников, близкие к ожидаемому тексту в документах. "
             "Оптимизируется под recall и поиск максимально релевантных чанков."
+        ),
+    )
+
+
+class RetrievalPrompts(BaseModel):
+    """Промпты для retrieval-этапа: dense retrieval и cross-encoder reranking."""
+
+    rag_prompts: list[RagPrompt] = Field(
+        ...,
+        min_length=3,
+        max_length=3,
+        description=(
+            "Ровно 3 разных семантических запроса для dense-поиска в Qdrant. "
+            "Каждый — отдельный угол: синонимы, аббревиатуры, формулировки из ПД/СП. "
+            "Запросы не должны дублировать друг друга дословно."
         ),
     )
 
@@ -119,12 +147,9 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
         rewrite_count = prev_rewrite_count
 
     system_message = SystemMessage(
-        "Ты готовишь два разных текста для RAG по проектной документации (строительство, экология).\n"
-        "1) rag_prompt — для семантического (векторного) поиска по чанкам: насыщен ключевыми словами, "
-        "синонимами, типовыми аббревиатурами разделов, чтобы поиск нашёл кандидатов шире.\n"
-        "2) reranker_prompt — для cross-encoder: одна ясная формулировка «что искать во фрагменте», "
-        "по смыслу близкая к проверке релевантности пары (запрос, абзац документа).\n"
-        "Оба текста на русском. Не дублируй дословно длинные куски задачи — извлеки суть под поиск."
+        "Ты готовишь промпты для RAG по проектной документации (строительство, экология).\n"
+        "Твоя задача — извлечь из запроса пользователя ключевые смыслы для эффективного RAG-поиска.\n"
+        "Отвечай на русском языке, используя терминологию отрасли."
     )
 
     extra = ""
@@ -134,9 +159,9 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
             f"Причина REWRITE: {state.get('check_reason', '')}\n"
             f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n"
             f"Предыдущий JSON-ответ: {state.get('answer', '')}\n"
-            f"Предыдущий rag_prompt: {state.get('rag_prompt', '')}\n"
+            f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n"
             f"Предыдущий reranker_prompt: {state.get('reranker_prompt', '')}\n"
-            "Сгенерируй новые rag_prompt и reranker_prompt, чтобы закрыть пробелы."
+            "Сгенерируй новые rag_prompts (3 шт.) и reranker_prompt, чтобы закрыть пробелы."
         )
 
     human = HumanMessage(
@@ -150,22 +175,32 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
     prompts = llm.with_structured_output(RetrievalPrompts, strict=True).invoke(
         [system_message, human]
     )
-    out["rag_prompt"] = prompts.rag_prompt.strip() or input_query
+    expanded = [
+        item.rag_prompt.strip()
+        for item in prompts.rag_prompts
+        if item.rag_prompt.strip()
+    ]
+    if len(expanded) !=3:
+        logger.warning(f"len(RetrievalPrompts.rag_prompts) != 3, {expanded}")
+    while len(expanded) < 3:
+        expanded.append(input_query)
+        
+    out["rag_prompts"] = expanded[:3]
     out["reranker_prompt"] = prompts.reranker_prompt.strip() or input_query
 
     return out
 
 
 def rag_search_node(state: Agent2State) -> Agent2State:
-    rag_prompt = state["rag_prompt"]
+    rag_prompts = state["rag_prompts"]
     reranker_prompt = state["reranker_prompt"]
     chunks = _rag_search_and_rerank(
-        rag_prompt, reranker_prompt, state.get("output_model")
+        rag_prompts, reranker_prompt, state.get("output_model")
     )
     rag_context = format_rag_context(chunks)
     logger.info(
-        f"[agent_2] RAG search completed (rag_prompt / reranker_prompt lengths: "
-        f"{len(rag_prompt)} / {len(reranker_prompt)})"
+        f"[agent_2] RAG search completed "
+        f"(rag_prompts={len(rag_prompts)}, reranker_prompt len={len(reranker_prompt)})"
     )
     return {"rag_context": rag_context}
 

@@ -13,16 +13,16 @@ def test_search_in_related_disciplines_requires_init():
     agent2.PARAMS_2.collection_name = None
 
     with pytest.raises(RuntimeError, match="Qdrant не инициализирован"):
-        agent2._rag_search_and_rerank("q", "q", output_model=BaseModel)
+        agent2._rag_search_and_rerank(["q"], "q", output_model=BaseModel)
 
 
 def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.MonkeyPatch):
     import src.agents.agent2 as agent2
 
-    captured: dict[str, str] = {}
+    captured: dict[str, object] = {}
 
-    def fake_search(rp: str, rr: str, _m):
-        captured["rag_prompt"] = rp
+    def fake_search(rp: list[str], rr: str, _m):
+        captured["rag_prompts"] = rp
         captured["reranker_prompt"] = rr
         return ["c1", "c2"]
 
@@ -32,7 +32,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
     out = agent2.rag_search_node(
         {
             "input_query": "hello",
-            "rag_prompt": "dense query",
+            "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
             "reranker_prompt": "rerank query",
             "rag_context": "",
             "rag_contexts": [],
@@ -45,7 +45,10 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
         }
     )
     
-    assert captured == {"rag_prompt": "dense query", "reranker_prompt": "rerank query"}
+    assert captured == {
+        "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
+        "reranker_prompt": "rerank query",
+    }
     assert out["rag_context"] == "CTX:c1|c2"
 
 
@@ -56,7 +59,11 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         x: int | None = None
 
     class FakePrompts:
-        rag_prompt = "  dense  "
+        rag_prompts = [
+            agent2.RagPrompt(rag_prompt="  dense1  "),
+            agent2.RagPrompt(rag_prompt="  dense2  "),
+            agent2.RagPrompt(rag_prompt="  dense3  "),
+        ]
         reranker_prompt = "  rerank  "
 
     class FakeStructured:
@@ -72,7 +79,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
     out = agent2.generate_retrieval_prompts_node(
         {
             "input_query": "user q\nextract x",
-            "rag_prompt": "",
+            "rag_prompts": [],
             "reranker_prompt": "",
             "rag_context": "",
             "rag_contexts": [],
@@ -84,7 +91,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
             "rewrite_count": 0,
         }
     )
-    assert out["rag_prompt"] == "dense"
+    assert out["rag_prompts"] == ["dense1", "dense2", "dense3"]
     assert out["reranker_prompt"] == "rerank"
 
 
@@ -95,8 +102,12 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         x: int | None = None
 
     class FakePrompts:
-        rag_prompt = "a"
-        reranker_prompt = "b"
+        rag_prompts = [
+            agent2.RagPrompt(rag_prompt="a"),
+            agent2.RagPrompt(rag_prompt="b"),
+            agent2.RagPrompt(rag_prompt="c"),
+        ]
+        reranker_prompt = "rr"
 
     class FakeStructured:
         def invoke(self, _messages):
@@ -111,7 +122,7 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
     out = agent2.generate_retrieval_prompts_node(
         {
             "input_query": "q",
-            "rag_prompt": "old_r",
+            "rag_prompts": ["old_r"],
             "reranker_prompt": "old_rr",
             "rag_context": "",
             "rag_contexts": [],
@@ -124,7 +135,7 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         }
     )
     assert out["rewrite_count"] == 1
-    assert out["rag_prompt"] == "a"
+    assert out["rag_prompts"] == ["a", "b", "c"]
 
 
 def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch):
@@ -143,6 +154,8 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
             captured["part_names"] = part_names
 
             class P:
+                id = "p1"
+                score = 0.9
                 payload = {"text": "t1"}
 
             return [P()]
@@ -153,9 +166,11 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(agent2, "rerank_chunks", lambda _q, texts, **kwargs: [(texts[0], 1.0)])
     monkeypatch.setattr(agent2, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
-    chunks = agent2._rag_search_and_rerank("qq", "qq", output_model=Out)
+    chunks = agent2._rag_search_and_rerank(["q1", "q2", "q3"], "qq", output_model=Out)
     assert chunks == ["t1"]
     assert captured["part_names"] == ["АР", "КР"]
+    assert captured["collection_name"] == "main"
+    assert captured["limit"] == 50
 
 
 def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
@@ -177,7 +192,7 @@ def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
     out = agent2.answer_node(
         {
             "input_query": "prompt",
-            "rag_prompt": "",
+            "rag_prompts": [],
             "reranker_prompt": "",
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
@@ -218,7 +233,7 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
     out = agent2.answer_node(
         {
             "input_query": "prompt",
-            "rag_prompt": "",
+            "rag_prompts": [],
             "reranker_prompt": "",
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
@@ -255,7 +270,7 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
     out = agent2.answer_node(
         {
             "input_query": "prompt",
-            "rag_prompt": "",
+            "rag_prompts": [],
             "reranker_prompt": "",
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
@@ -290,7 +305,7 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
     out = agent2.answer_node(
         {
             "input_query": "prompt",
-            "rag_prompt": "",
+            "rag_prompts": [],
             "reranker_prompt": "",
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
