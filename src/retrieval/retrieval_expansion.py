@@ -4,7 +4,7 @@ RAG-пайплайн с query expansion: multiple retrieval → merge.
 Ожидаемый порядок вызовов (остальные этапы — на стороне вызывающего кода):
 
     expanded_queries = ...          # Query Expansion
-    per_query = multiple_retrieval(...)
+    per_query = search_by_multi_rag_queries(...)
     merged = merge_retrieval_results(per_query)
     texts = chunks_to_texts(merged) # → reranker → context assembly → LLM
 """
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class RetrievedChunk:
-    """Единый элемент после merge — готов к reranking."""
+    """Элемент после merge"""
 
     text: str
     score: float
@@ -35,8 +35,8 @@ class RetrievedChunk:
     source_queries: tuple[str, ...] = ()
 
 
-def multiple_retrieval(
-    queries: list[str],
+def search_by_multi_rag_queries(
+    rag_queries: list[str],
     qdrant_service: QdrantService,
     collection_name: str,
     *,
@@ -44,7 +44,18 @@ def multiple_retrieval(
     part_names: list[str] | None = None,
     max_workers: int | None = 4,
 ) -> list[tuple[str, list[ScoredPoint]]]:
-    if not queries:
+    """
+    Запускает параллельный поиск релевантных частей для каждого rag_prompt.
+    
+    :param rag_queries: список rag запросов
+    :param qdrant_service: QdrantService
+    :param collection_name: имя коллекции
+    :param limit: сколько точек должен вернуть каждый rag-поиск
+    :param part_names: где искать релевантные фрагменты
+    :param max_workers: кол-во потоков
+    :return: Список пар (query, points)
+    """
+    if not rag_queries:
         return []
 
     def _search(query: str) -> list[ScoredPoint]:
@@ -55,24 +66,27 @@ def multiple_retrieval(
             part_names=part_names,
         )
 
-    workers = max_workers or min(8, len(queries))
-    results: list[tuple[str, list[ScoredPoint]]] = [(q, []) for q in queries]
+    workers = max_workers or min(4, len(rag_queries))
+    results: list[tuple[str, list[ScoredPoint]]] = [(q, []) for q in rag_queries]
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_idx = {
-            executor.submit(_search, q): i
-            for i, q in enumerate(queries)
-            if q.strip()
+            executor.submit(_search, query): i
+            for i, query in enumerate(rag_queries)
+            if query.strip()
         }
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
+            query = rag_queries[idx]
             try:
-                results[idx] = (queries[idx], future.result())
+                points = future.result()
             except Exception:
                 logger.exception(
-                    "[query_expansion_retrieval] retrieval failed for query=%r",
-                    queries[idx],
+                    "[retrieval_expansion] retrieval failed for query=%r",
+                    query,
                 )
+                points = []
+            results[idx] = (query, points)
 
     return results
 
@@ -85,9 +99,12 @@ def merge_retrieval_results(
 ) -> list[RetrievedChunk]:
     """
     Объединяет результаты нескольких запросов в один ранжированный список.
-
     Дубликаты по point.id схлопываются на этапе merge.
     Стратегии: max_score, sum_score, rrf (см. rank_fusion.fuse_ranked_lists).
+    :param per_query_results: список пар (query, points)
+    :param strategy: стратегия объединения
+    :param rrf_k: параметр стратегии rrf
+    :return: список элементов после merge: [RetrievedChunk(text, score, point_id, payload, source_queries), ...]
     """
     if not per_query_results:
         return []
@@ -133,5 +150,5 @@ def merge_retrieval_results(
 
 
 def chunks_to_texts(chunks: list[RetrievedChunk]) -> list[str]:
-    """Тексты чанков для reranker (совместимо с rerank_chunks)."""
+    """Извлечь text из списка RetrievedChunk"""
     return [c.text for c in chunks if c.text]

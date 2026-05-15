@@ -16,10 +16,10 @@ from src.retrieval.qdrant import (
     create_project_parts,
     fill_collection,
 )
-from src.retrieval.query_expansion_retrieval import (
+from src.retrieval.retrieval_expansion import (
     chunks_to_texts,
     merge_retrieval_results,
-    multiple_retrieval,
+    search_by_multi_rag_queries,
 )
 from src.retrieval.reranker_expansion import rerank_with_expanded_queries
 from src.utils.logger import logger
@@ -77,14 +77,14 @@ def _rag_search_and_rerank(
     if not queries:
         return []
 
-    per_query = multiple_retrieval(
+    query_points_tuple = search_by_multi_rag_queries(
         queries,
         qdrant_service,
         collection_name,
         limit=50,
         part_names=get_part_names_for_model(output_model),
     )
-    merged = merge_retrieval_results(per_query)
+    merged = merge_retrieval_results(query_points_tuple)
     texts = chunks_to_texts(merged)
     if not texts:
         return []

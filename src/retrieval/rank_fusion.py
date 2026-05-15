@@ -5,16 +5,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, Hashable, Literal, TypeVar
+from typing import Literal
 
 MergeStrategy = Literal["max_score", "sum_score", "rrf"]
 
-K = TypeVar("K", bound=Hashable)
-
 
 @dataclass(frozen=True, slots=True)
-class FusedRankItem(Generic[K]):
-    key: K
+class FusedRankItem:
+    key: str | int
     score: float
     source_queries: tuple[str, ...] = ()
 
@@ -24,12 +22,12 @@ def normalize_text(text: str) -> str:
 
 
 def fuse_ranked_lists(
-    per_query_results: list[tuple[str, list[tuple[K, float]]]],
+    per_query_results: list[tuple[str, list[tuple[str | int, float]]]],
     *,
     strategy: MergeStrategy = "rrf",
     rrf_k: int = 60,
     dedupe_within_query: bool = True,
-) -> list[FusedRankItem[K]]:
+) -> list[FusedRankItem]:
     """
     Объединяет несколько ранжированных списков по ключу.
 
@@ -42,7 +40,7 @@ def fuse_ranked_lists(
     if strategy == "rrf":
         return _fuse_rrf(per_query_results, k=rrf_k, dedupe_within_query=dedupe_within_query)
 
-    accum: dict[K, dict] = {}
+    accum: dict[str | int, dict] = {}
     for query, ranked in per_query_results:
         for key, raw_score in ranked:
             score = float(raw_score)
@@ -72,16 +70,16 @@ def fuse_ranked_lists(
 
 
 def _fuse_rrf(
-    per_query_results: list[tuple[str, list[tuple[K, float]]]],
+    per_query_results: list[tuple[str, list[tuple[str | int, float]]]],
     *,
     k: int,
     dedupe_within_query: bool,
-) -> list[FusedRankItem[K]]:
-    rrf_scores: dict[K, float] = {}
-    sources: dict[K, set[str]] = {}
+) -> list[FusedRankItem]:
+    rrf_scores: dict[str | int, float] = {}
+    sources: dict[str | int, set[str]] = {}
 
     for query, ranked in per_query_results:
-        seen: set[K] = set()
+        seen: set[str | int] = set()
         for rank, (key, _score) in enumerate(ranked, start=1):
             if dedupe_within_query and key in seen:
                 continue

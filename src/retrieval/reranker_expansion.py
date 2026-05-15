@@ -97,7 +97,7 @@ def merge_rerank_results(
             keyed.append((key, float(score)))
         ranked_by_key.append((query, keyed))
 
-    fused: list[FusedRankItem[str]] = fuse_ranked_lists(
+    fused: list[FusedRankItem] = fuse_ranked_lists(
         ranked_by_key,
         strategy=strategy,
         rrf_k=rrf_k,
@@ -125,8 +125,6 @@ def rerank_with_expanded_queries(
 ) -> list[tuple[str, float]]:
     """
     Multiple rerank → merge → top_n.
-
-    Совместимо с прежним контрактом `rerank_chunks`: list[(text, score)].
     """
     clean_queries = [q.strip() for q in queries if q and q.strip()]
     if not clean_queries or not chunks:
