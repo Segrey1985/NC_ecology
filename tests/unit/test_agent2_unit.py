@@ -13,7 +13,7 @@ def test_search_in_related_disciplines_requires_init():
     agent2.PARAMS_2.collection_name = None
 
     with pytest.raises(RuntimeError, match="Qdrant не инициализирован"):
-        agent2._rag_search_and_rerank(["q"], "q", output_model=BaseModel)
+        agent2._rag_search_and_rerank(["q"], ["q"], output_model=BaseModel)
 
 
 def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.MonkeyPatch):
@@ -21,9 +21,9 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
 
     captured: dict[str, object] = {}
 
-    def fake_search(rp: list[str], rr: str, _m):
+    def fake_search(rp: list[str], rr: list[str], _m):
         captured["rag_prompts"] = rp
-        captured["reranker_prompt"] = rr
+        captured["reranker_prompts"] = rr
         return ["c1", "c2"]
 
     monkeypatch.setattr(agent2, "_rag_search_and_rerank", fake_search)
@@ -33,7 +33,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
         {
             "input_query": "hello",
             "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
-            "reranker_prompt": "rerank query",
+            "reranker_prompts": ["rerank query", "rerank query 2", "rerank query 3"],
             "rag_context": "",
             "rag_contexts": [],
             "output_model": BaseModel,
@@ -47,7 +47,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
     
     assert captured == {
         "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
-        "reranker_prompt": "rerank query",
+        "reranker_prompts": ["rerank query", "rerank query 2", "rerank query 3"],
     }
     assert out["rag_context"] == "CTX:c1|c2"
 
@@ -64,7 +64,11 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
             agent2.RagPrompt(rag_prompt="  dense2  "),
             agent2.RagPrompt(rag_prompt="  dense3  "),
         ]
-        reranker_prompt = "  rerank  "
+        reranker_prompts = [
+            agent2.RerankPrompt(reranker_prompt="  rerank1  "),
+            agent2.RerankPrompt(reranker_prompt="  rerank2  "),
+            agent2.RerankPrompt(reranker_prompt="  rerank3  "),
+        ]
 
     class FakeStructured:
         def invoke(self, _messages):
@@ -80,7 +84,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         {
             "input_query": "user q\nextract x",
             "rag_prompts": [],
-            "reranker_prompt": "",
+            "reranker_prompts": [],
             "rag_context": "",
             "rag_contexts": [],
             "output_model": Out,
@@ -92,7 +96,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         }
     )
     assert out["rag_prompts"] == ["dense1", "dense2", "dense3"]
-    assert out["reranker_prompt"] == "rerank"
+    assert out["reranker_prompts"] == ["rerank1", "rerank2", "rerank3"]
 
 
 def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: pytest.MonkeyPatch):
@@ -107,7 +111,11 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
             agent2.RagPrompt(rag_prompt="b"),
             agent2.RagPrompt(rag_prompt="c"),
         ]
-        reranker_prompt = "rr"
+        reranker_prompts = [
+            agent2.RerankPrompt(reranker_prompt="r1"),
+            agent2.RerankPrompt(reranker_prompt="r2"),
+            agent2.RerankPrompt(reranker_prompt="r3"),
+        ]
 
     class FakeStructured:
         def invoke(self, _messages):
@@ -123,7 +131,7 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         {
             "input_query": "q",
             "rag_prompts": ["old_r"],
-            "reranker_prompt": "old_rr",
+            "reranker_prompts": ["old_rr"],
             "rag_context": "",
             "rag_contexts": [],
             "output_model": Out,
@@ -163,10 +171,16 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
     agent2.PARAMS_2.qdrant_service = FakeQdrant()
     agent2.PARAMS_2.collection_name = "main"
 
-    monkeypatch.setattr(agent2, "rerank_chunks", lambda _q, texts, **kwargs: [(texts[0], 1.0)])
+    monkeypatch.setattr(
+        agent2,
+        "rerank_with_expanded_queries",
+        lambda _qs, texts, **kwargs: [(texts[0], 1.0)],
+    )
     monkeypatch.setattr(agent2, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
-    chunks = agent2._rag_search_and_rerank(["q1", "q2", "q3"], "qq", output_model=Out)
+    chunks = agent2._rag_search_and_rerank(
+        ["q1", "q2", "q3"], ["rr1", "rr2", "rr3"], output_model=Out
+    )
     assert chunks == ["t1"]
     assert captured["part_names"] == ["АР", "КР"]
     assert captured["collection_name"] == "main"
@@ -193,7 +207,7 @@ def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
         {
             "input_query": "prompt",
             "rag_prompts": [],
-            "reranker_prompt": "",
+            "reranker_prompts": [],
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
             "output_model": Out,
@@ -234,7 +248,7 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
         {
             "input_query": "prompt",
             "rag_prompts": [],
-            "reranker_prompt": "",
+            "reranker_prompts": [],
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
             "output_model": Out,
@@ -271,7 +285,7 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
         {
             "input_query": "prompt",
             "rag_prompts": [],
-            "reranker_prompt": "",
+            "reranker_prompts": [],
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
             "output_model": Out,
@@ -306,7 +320,7 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
         {
             "input_query": "prompt",
             "rag_prompts": [],
-            "reranker_prompt": "",
+            "reranker_prompts": [],
             "rag_context": "ctx",
             "rag_contexts": ["ctx1", "ctx2"],
             "output_model": Out,

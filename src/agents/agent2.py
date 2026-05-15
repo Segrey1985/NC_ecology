@@ -18,11 +18,10 @@ from src.retrieval.qdrant import (
 )
 from src.retrieval.query_expansion_retrieval import (
     chunks_to_texts,
-    deduplicate_chunks,
     merge_retrieval_results,
     multiple_retrieval,
 )
-from src.retrieval.reranker import rerank_chunks
+from src.retrieval.reranker_expansion import rerank_with_expanded_queries
 from src.utils.logger import logger
 from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
@@ -49,7 +48,7 @@ class Agent2State(TypedDict):
     rag_prompts: list[str]
     rag_context: str
     rag_contexts: Annotated[list[str], add]
-    reranker_prompt: str
+    reranker_prompts: list[str]
 
     # agent_node (output_model — класс pydantic-схемы для structured output)
     answer: str
@@ -64,7 +63,7 @@ class Agent2State(TypedDict):
 
 def _rag_search_and_rerank(
     rag_prompts: list[str],
-    reranker_prompt: str,
+    reranker_prompts: list[str],
     output_model: type[BaseModel] | None,
 ) -> list[str]:
     qdrant_service = PARAMS_2.qdrant_service
@@ -86,12 +85,11 @@ def _rag_search_and_rerank(
         part_names=get_part_names_for_model(output_model),
     )
     merged = merge_retrieval_results(per_query)
-    unique = deduplicate_chunks(merged)
-    texts = chunks_to_texts(unique)
+    texts = chunks_to_texts(merged)
     if not texts:
         return []
     
-    reranked = rerank_chunks(reranker_prompt, texts, top_n=5)
+    reranked = rerank_with_expanded_queries(reranker_prompts, texts, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 
@@ -104,6 +102,17 @@ class RagPrompt(BaseModel):
             "типовые формулировки из проектной документации, СП, ГОСТ и других "
             "источников, близкие к ожидаемому тексту в документах. "
             "Оптимизируется под recall и поиск максимально релевантных чанков."
+        ),
+    )
+
+
+class RerankPrompt(BaseModel):
+    reranker_prompt: str = Field(
+        ...,
+        description=(
+            "Короткая формулировка целевой информации для cross-encoder reranker. "
+            "Описывает, какая именно информация должна присутствовать во фрагменте. "
+            "Без длинных перечислений синонимов и служебного текста."
         ),
     )
 
@@ -122,13 +131,14 @@ class RetrievalPrompts(BaseModel):
         ),
     )
 
-    reranker_prompt: str = Field(
+    reranker_prompts: list[RerankPrompt] = Field(
         ...,
+        min_length=3,
+        max_length=3,
         description=(
-            "Короткая и точная формулировка целевой информации для cross-encoder reranker. "
-            "Должна описывать, какая именно информация должна присутствовать во фрагменте. "
-            "Оптимизируется под semantic precision и точную оценку релевантности. "
-            "Без длинных инструкций, перечислений синонимов и служебного текста."
+            "Ровно 3 разных коротких запроса для cross-encoder reranker. "
+            "Каждый описывает отдельный аспект целевой информации во фрагменте; "
+            "формулировки не дублируют друг друга дословно."
         ),
     )
 
@@ -160,8 +170,8 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
             f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n"
             f"Предыдущий JSON-ответ: {state.get('answer', '')}\n"
             f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n"
-            f"Предыдущий reranker_prompt: {state.get('reranker_prompt', '')}\n"
-            "Сгенерируй новые rag_prompts (3 шт.) и reranker_prompt, чтобы закрыть пробелы."
+            f"Предыдущие reranker_prompts: {state.get('reranker_prompts', [])}\n"
+            "Сгенерируй новые rag_prompts (3 шт.) и reranker_prompts (3 шт.), чтобы закрыть пробелы."
         )
 
     human = HumanMessage(
@@ -180,27 +190,36 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
         for item in prompts.rag_prompts
         if item.rag_prompt.strip()
     ]
-    if len(expanded) !=3:
-        logger.warning(f"len(RetrievalPrompts.rag_prompts) != 3, {expanded}")
+    if len(expanded) != 3:
+        logger.warning("len(RetrievalPrompts.rag_prompts) != 3: %s", expanded)
     while len(expanded) < 3:
         expanded.append(input_query)
-        
     out["rag_prompts"] = expanded[:3]
-    out["reranker_prompt"] = prompts.reranker_prompt.strip() or input_query
+
+    rerank_expanded = [
+        item.reranker_prompt.strip()
+        for item in prompts.reranker_prompts
+        if item.reranker_prompt.strip()
+    ]
+    if len(rerank_expanded) != 3:
+        logger.warning("len(RetrievalPrompts.reranker_prompts) != 3: %s", rerank_expanded)
+    while len(rerank_expanded) < 3:
+        rerank_expanded.append(input_query)
+    out["reranker_prompts"] = rerank_expanded[:3]
 
     return out
 
 
 def rag_search_node(state: Agent2State) -> Agent2State:
     rag_prompts = state["rag_prompts"]
-    reranker_prompt = state["reranker_prompt"]
+    reranker_prompts = state["reranker_prompts"]
     chunks = _rag_search_and_rerank(
-        rag_prompts, reranker_prompt, state.get("output_model")
+        rag_prompts, reranker_prompts, state.get("output_model")
     )
     rag_context = format_rag_context(chunks)
     logger.info(
         f"[agent_2] RAG search completed "
-        f"(rag_prompts={len(rag_prompts)}, reranker_prompt len={len(reranker_prompt)})"
+        f"(rag_prompts={len(rag_prompts)}, reranker_prompts={len(reranker_prompts)})"
     )
     return {"rag_context": rag_context}
 
