@@ -3,8 +3,10 @@ import glob
 import pypdf
 import pathlib
 from io import BytesIO
-from typing import Optional
-from pydantic import BaseModel
+from typing import Any, Optional, get_args
+
+from pydantic import BaseModel, ConfigDict, create_model
+from pydantic.alias_generators import to_pascal
 from pdfminer.layout import LTTextBox, LTTextLine
 from pdfminer.high_level import extract_pages as extract_pages_miner
 from langchain_core.messages import (
@@ -336,10 +338,110 @@ def iter_models_from_module(module_path: str) -> list[type[BaseModel]]:
     return out
 
 
+def filter_models_by_names(
+    models: list[type[BaseModel]],
+    names: list[str] | None,
+) -> list[type[BaseModel]]:
+    """None — без фильтра, иначе только модели с именами из `names`."""
+    if names is None:
+        return models
+    allowed = set(names)
+    return [m for m in models if m.__name__ in allowed]
+
+
+def get_active_model_names(chapter_module_path: str) -> list[str] | None:
+    """Читает ACTIVE_MODEL_NAMES из `<chapter>._debug_models` (для test_mode='filter')."""
+    try:
+        module = importlib.import_module(f"{chapter_module_path}._debug_models")
+    except ModuleNotFoundError:
+        return None
+    return getattr(module, "ACTIVE_MODEL_NAMES", None)
+
+
+def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
+    """Модели главы с фильтром из `_debug_models.py` (только test_mode='filter' в main2)."""
+    return filter_models_by_names(
+        iter_models_from_module(f"{chapter_module_path}.models"),
+        get_active_model_names(chapter_module_path),
+    )
+
+
+def pascal_to_snake(name: str) -> str:
+    """Facility → facility, NearestObjects → nearest_objects."""
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+
+def _nested_model_type(annotation: Any) -> type[BaseModel] | None:
+    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in get_args(annotation):
+        if arg is type(None):
+            continue
+        if inspect.isclass(arg) and issubclass(arg, BaseModel):
+            return arg
+    return None
+
+
+def build_chapter_assembly_model(
+    models_module_path: str,
+    *,
+    model_name: str = "ChapterData",
+) -> type[BaseModel]:
+    """
+    Собирает корневую pydantic-модель главы из всех моделей в `*.models`.
+    Поля опциональны — можно валидировать и рендерить docx по частичному JSON.
+    """
+    field_defs: dict[str, tuple[Any, None]] = {}
+    for model_cls in iter_models_from_module(models_module_path):
+        field_defs[pascal_to_snake(model_cls.__name__)] = (model_cls | None, None)
+
+    return create_model(
+        model_name,
+        __config__=ConfigDict(
+            alias_generator=to_pascal,
+            populate_by_name=True,
+        ),
+        **field_defs,
+    )
+
+
+def filter_payload_and_validate(
+    assembly_model: type[BaseModel],
+    results: dict[str, object],
+) -> BaseModel:
+    """Подставляет в assembly только те блоки, что есть в `results` (ключи — имена классов)."""
+    payload: dict[str, object] = {}
+    for field_name, field_info in assembly_model.model_fields.items():
+        nested = _nested_model_type(field_info.annotation)
+        if nested is None:
+            continue
+        value = results.get(nested.__name__)
+        if value is not None:
+            payload[field_name] = value
+    return assembly_model.model_validate(payload)
+
+
+def assembly_to_docx_context(
+    assembly_model: type[BaseModel],
+    data: BaseModel,
+) -> dict[str, object]:
+    """
+    Контекст для docxtpl: snake_case-ключи как в шаблоне.
+    Незаполненные секции — пустой dict, чтобы Jinja не падал на partial-прогоне.
+    """
+    dumped = data.model_dump(mode="json")
+    ctx: dict[str, object] = {}
+    for field_name in assembly_model.model_fields:
+        value = dumped.get(field_name)
+        ctx[field_name] = value if value is not None else {}
+    return ctx
+
+
 def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
     """
     Достаём единственную корневую модель сборки из `<chapter>.assembly`.
-    В `assembly.py` должен быть ровно один локально объявленный класс-наследник BaseModel.
+    Ищем BaseModel-классы, экспортированные в модуле (в т.ч. собранные через create_model).
     """
     module = importlib.import_module(assembly_module_path)
 
@@ -350,8 +452,6 @@ def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
         if not issubclass(obj, BaseModel):
             continue
         if obj is BaseModel:
-            continue
-        if getattr(obj, "__module__", "") != module.__name__:
             continue
         candidates.append(obj)
 

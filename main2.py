@@ -15,7 +15,10 @@ from src.utils.utils import (
     print_chunk,
     is_valid_uuid4_hex,
     iter_models_from_module,
+    iter_chapter_models,
     pick_assembly_model,
+    filter_payload_and_validate,
+    assembly_to_docx_context,
     build_input_query,
 )
 from src.templates.docx_template_engine import fill_docx_template
@@ -93,7 +96,7 @@ def main(
     chapter_module_path: str,
     collection_name: str = "main",
     verbose: bool = True,
-    test_mode: Literal["on", "off", "mock"] = "on",
+    test_mode: Literal["on", "off", "mock", "filter"] = "on",
     max_workers: int | None = None,
 ):
     try:
@@ -117,13 +120,21 @@ def main(
             # get models from module
 
             models_module_path = chapter_module_path + ".models"
-            models = iter_models_from_module(models_module_path)
-            if not models:
-                raise RuntimeError(
-                    f"Не нашёл pydantic-моделей в модуле `{models_module_path}`."
-                )
-            if test_mode == "on":
-                models = models[:1]
+            if test_mode == "filter":
+                models = iter_chapter_models(chapter_module_path)
+                if not models:
+                    raise RuntimeError(
+                        f"Не нашёл pydantic-моделей в модуле `{models_module_path}` "
+                        f"(см. `{chapter_module_path}.debug_models`)."
+                    )
+            else:
+                models = iter_models_from_module(models_module_path)
+                if not models:
+                    raise RuntimeError(
+                        f"Не нашёл pydantic-моделей в модуле `{models_module_path}`."
+                    )
+                if test_mode == "on":
+                    models = models[:1]
 
             # run thread_run_graph_for_model in ThreadPoolExecutor
 
@@ -170,8 +181,12 @@ def main(
             if template_docx_path:
                 assembly_module_path = chapter_module_path + ".assembly"
                 assembly_model = pick_assembly_model(assembly_module_path)
-                data = assembly_model.model_validate(results)
-                data_dict = data.model_dump(mode="json")
+                if test_mode == "filter":
+                    data = filter_payload_and_validate(assembly_model, results)
+                    data_dict = assembly_to_docx_context(assembly_model, data)
+                else:
+                    data = assembly_model.model_validate(results)
+                    data_dict = data.model_dump(mode="json")
                 result_template_out_path = (
                     output_path / f"{chapter_module_path.split('.')[-1]}.docx"
                 )
@@ -209,6 +224,6 @@ if __name__ == "__main__":
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter1",
         collection_name="all",
-        test_mode="off",
+        test_mode="filter",
         max_workers=8,
     )

@@ -31,7 +31,7 @@ def test_iter_models_from_module_filters_imported_models(tmp_path: Path, monkeyp
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
 
-    from main2 import iter_models_from_module
+    from src.utils.utils import iter_models_from_module
 
     models = iter_models_from_module("tmp_pkg.models_mod")
     assert [m.__name__ for m in models] == ["LocalA", "LocalB"]
@@ -113,6 +113,45 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     assert out_json.read_text(encoding="utf-8").strip() != ""
     assert "M" in out_json.read_text(encoding="utf-8")
     assert main2.PARAMS_2.qdrant_service.client.deleted == [collection_name]
+
+
+def test_main_filter_mode_uses_iter_chapter_models(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    import main2
+
+    class M(BaseModel):
+        x: int
+
+    called = {"filter": False}
+
+    def fake_iter_chapter(_path: str):
+        called["filter"] = True
+        return [M]
+
+    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: object())
+    monkeypatch.setattr("main2.iter_chapter_models", fake_iter_chapter)
+    monkeypatch.setattr(
+        "main2.thread_run_graph_for_model",
+        lambda **_kwargs: {
+            "model_name": "M",
+            "result": {"x": 1},
+            "logs_lines": [],
+            "model": M,
+        },
+    )
+
+    main2.main(
+        template_docx_path=None,
+        project_parts_path=None,
+        output_path=tmp_path / "out",
+        chapter_module_path="x.y",
+        collection_name="main",
+        verbose=False,
+        test_mode="filter",
+        max_workers=1,
+    )
+    assert called["filter"]
 
 
 def test_main_raises_if_no_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

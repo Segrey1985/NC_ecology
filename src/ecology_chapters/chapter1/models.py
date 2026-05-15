@@ -14,7 +14,7 @@ from .inner import *
 
 class Facility(BaseModel):
     """Основные сведения об объекте проектирования"""
-    
+
     type_nominative: str = Field(
         ...,
         description="Полное наименование объекта в именительном падеже (например: блочно-модульная газовая котельная, котельная).",
@@ -59,7 +59,7 @@ class Facility(BaseModel):
 
 class LandPlot(BaseModel):
     """Сведения о земельном участке"""
-    
+
     cadastral_number: str = Field(
         ...,
         description="Кадастровый номер земельного участка",
@@ -93,7 +93,7 @@ class LandPlot(BaseModel):
 
 class Structures(BaseModel):
     """Перечень сооружений, размещаемых на участке"""
-    
+
     structures: list[str] = Field(
         default_factory=list,
         description="Перечень сооружений на участке. Пример элементов: здание котельной, дымовая труба, ограждение из 3D сварной сетки.",
@@ -102,7 +102,7 @@ class Structures(BaseModel):
 
 class Ownership(BaseModel):
     """Документ, подтверждающий право пользования участком"""
-    
+
     ownership: Optional[str] = Field(
         None,
         description="Формулировка права пользования участком (например: договором аренды земельного участка № 123 от 01.01.2024).",
@@ -111,7 +111,7 @@ class Ownership(BaseModel):
 
 class SanitaryZone(BaseModel):
     """Санитарно-защитная зона"""
-    
+
     include_description: bool = Field(
         True,
         description="Включать ли описание СЗЗ в текст главы",
@@ -131,38 +131,45 @@ class SanitaryZone(BaseModel):
 
 
 class Surroundings(BaseModel):
-    """Описание окружения объекта"""
-    
+    """Земельный участок ограничен ... (перечень объектов окружения кадастровые номера, расстояния, назначение)"""
+
     directions: list[SurroundingDirection] = Field(
         ...,
         description="Описание окружения по сторонам света",
     )
     data_sources: list[str] = Field(
         ...,
-        description="Источники данных для анализа окружения. Примеры строк: публичная кадастровая карта (https://pkk.rosreestr.ru); ситуационный план размещения котельной М 1:500 (Приложение 1).",
+        description=(
+            "Источники данных для анализа окружения. "
+            "Примеры строк:\n"
+            "- публичная кадастровая карта (https://pkk.rosreestr.ru); "
+            "- ситуационный план размещения котельной М 1:500 (Приложение 1).\n\n"
+            "В тексте встречается в составе предложения: "
+            "'Район расположения предприятия проанализирован на основании следующих официальных данных...'"
+        ),
     )
 
 
 class GeneralPlan(BaseModel):
-    """Сведения из Генерального плана МО"""
-    
-    municipality_name: str = Field(
-        ...,
-        description="Наименование муниципального образования",
-    )
-    approval_details: str = Field(
-        ...,
-        description="Реквизиты документа об утверждении Генплана",
-    )
-    territorial_zones: list[TerritorialZone] = Field(
-        ...,
-        description="Территориальные зоны вокруг объекта",
+    """Ограничения площадки по сведениям из Генерального плана"""
+
+    constraints_on_the_industrial_site: str = Field(
+        None,
+        description="""
+        Перечь зон согласно генеральному плану граничащих со строительной площадкой"
+        Например: В соответствии со сведениями Генерального плана ...
+        ... муниципального района ... области, утвержденного решением ...
+         от 01.01.2000 г. промплощадка ограничена
+         - с севера - Зона ...
+         - c востока - Зона застройки жилыми домами
+         - с юга - функциональная зона ...
+         """
     )
 
 
 class NearestObjects(BaseModel):
     """Перечень ближайших нормируемых объектов в радиусе нормативной санитарно-защитной зоны"""
-    
+
     nearest_objects: list[NearestObject] = Field(
         default_factory=list,
     )
@@ -170,7 +177,7 @@ class NearestObjects(BaseModel):
 
 class Architecture(BaseModel):
     """Архитектурно-планировочные решения"""
-    
+
     building_type: BuildingType = Field(
         ...,
         description="Тип здания котельной (modular — БМК, stationary — стационарное)",
@@ -231,7 +238,7 @@ class Architecture(BaseModel):
 
 class HeatSupply(BaseModel):
     """Параметры системы теплоснабжения"""
-    
+
     operation_mode: str = Field(
         ...,
         description="Режим работы (например: круглосуточно, отопительный период).",
@@ -251,16 +258,16 @@ class HeatSupply(BaseModel):
 
 
 class Boilers(BaseModel):
-    """"Перечень котлов"""
-    
+    """ "Перечень котлов"""
+
     boilers: list[Boiler] = Field(
         default_factory=list,
     )
 
 
 class Pumps(BaseModel):
-    """"Перечень вспомогательного оборудования (насосы)"""
-    
+    """ "Перечень вспомогательного оборудования (насосы)"""
+
     pumps: list[Pump] = Field(
         default_factory=list,
     )
@@ -268,7 +275,7 @@ class Pumps(BaseModel):
 
 class Fuel(BaseModel):
     """Сведения о топливе"""
-    
+
     primary_fuel: str = Field(
         ...,
         description="Вид основного топлива (например: природный газ).",
@@ -313,7 +320,7 @@ class Fuel(BaseModel):
 
 class PowerSupply(BaseModel):
     """Сведения об электроснабжении"""
-    
+
     source: str = Field(
         ...,
         description="Источник электроснабжения",
@@ -346,7 +353,7 @@ class PowerSupply(BaseModel):
 
 class WaterTreatment(BaseModel):
     """Химводоочистка"""
-    
+
     equipment: list[str] = Field(
         ...,
         description="Перечень блоков системы водоподготовки",
@@ -355,7 +362,7 @@ class WaterTreatment(BaseModel):
 
 class UtilityNetworks(BaseModel):
     """Инженерные сети"""
-    
+
     gas_supply: Optional[str] = Field(
         None,
         description="Описание газоснабжения",
@@ -372,7 +379,7 @@ class UtilityNetworks(BaseModel):
 
 class Ventilation(BaseModel):
     """Отопление и вентиляция"""
-    
+
     no_summer_operation: bool = Field(
         True,
         description="Котельная не работает в тёплый период",
