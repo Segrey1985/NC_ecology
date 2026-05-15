@@ -72,7 +72,7 @@ def _rag_search_and_rerank(
     relevant_points = qdrant_service.run_query(
         rag_prompt,
         collection_name=collection_name,
-        limit=30,
+        limit=50,
         part_names=part_names,
     )
     texts = [point.payload["text"] for point in relevant_points]

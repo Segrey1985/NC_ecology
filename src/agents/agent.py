@@ -68,7 +68,7 @@ def search_in_related_disciplines(query: str) -> list[str]:
         raise RuntimeError("Qdrant не инициализирован. Сначала вызовите init_graph().")
 
     relevant_points = qdrant_service.run_query(
-        query, collection_name=collection_name, limit=30
+        query, collection_name=collection_name, limit=50
     )
     texts = [point.payload["text"] for point in relevant_points]
     reranked = rerank_chunks(query, texts, top_n=5)
