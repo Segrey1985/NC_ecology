@@ -224,6 +224,6 @@ if __name__ == "__main__":
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter1",
         collection_name="all",
-        test_mode="filter",
+        test_mode="off",
         max_workers=8,
     )
