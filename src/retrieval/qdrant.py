@@ -5,7 +5,7 @@ from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, ScoredPoint
 from qdrant_client.models import Filter, FieldCondition, MatchAny
 
 from sentence_transformers import SentenceTransformer
@@ -71,7 +71,7 @@ class QdrantService:
         collection_name: str,
         limit: int = 3,
         part_names: list[str] | None = None,
-    ) -> list[PointStruct]:
+    ) -> list[ScoredPoint]:
         """
         Выполняет векторный поиск по коллекции.
 
