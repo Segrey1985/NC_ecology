@@ -171,7 +171,7 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
             f"Предыдущий JSON-ответ: {state.get('answer', '')}\n"
             f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n"
             f"Предыдущие reranker_prompts: {state.get('reranker_prompts', [])}\n"
-            "Сгенерируй новые rag_prompts (3 шт.) и reranker_prompts (3 шт.), чтобы закрыть пробелы."
+            "Сгенерируй новые rag_prompts и reranker_prompts, чтобы закрыть пробелы."
         )
 
     human = HumanMessage(
@@ -263,7 +263,7 @@ def answer_node(state: Agent2State) -> Agent2State:
         system_message,
         HumanMessage(
             content=(
-                f"Задача:\n{input_query}\n\n"
+                f"Задача: заполни json-схему на основе предложенного контекста:\n"
                 f"RAG-контекст:\n{rag_context}"
             )
         ),
