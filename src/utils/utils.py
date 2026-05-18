@@ -237,10 +237,49 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
             if first_alpha_pos is None:
                 continue
 
-            if page_text[first_alpha_pos:].startswith(text):
+            if page_text[first_alpha_pos:].startswith(text.strip()):
                 return page_idx
 
         return None
+    finally:
+        if not isinstance(input_pdf, bytes):
+            input_pdf_file.close()
+
+
+def find_pages_index_by_text(
+    input_pdf: str | bytes, text: str, max_len: int | None = None
+) -> list[int]:
+    """Возвращает индексы страниц, содержащих `text`"""
+
+    if not text:
+        return []
+
+    if isinstance(input_pdf, bytes):
+        input_pdf_file = BytesIO(input_pdf)
+    else:
+        input_pdf_file = open(input_pdf, "rb")
+
+    try:
+        reader = pypdf.PdfReader(input_pdf_file)
+
+        result_pages: list[int] = []
+
+        for page_idx, page in enumerate(reader.pages):
+            page_content: list[str] = extract_text_with_miner_coords(
+                input_pdf_file,
+                page_numbers=[page_idx],
+            )
+            page_text = page_content[0]
+            # Нормализуем переносы/табуляции
+            page_text = " ".join(page_text.replace("\t", " ").split())
+            if text.strip() in page_text:
+                result_pages.append(page_idx)
+
+            if max_len and len(result_pages) == max_len:
+                return result_pages
+
+        return result_pages
+
     finally:
         if not isinstance(input_pdf, bytes):
             input_pdf_file.close()
@@ -482,6 +521,7 @@ def build_input_query(model: type[BaseModel]) -> str:
         f"Описание: {doc or '—'}\n"
         "Поля:\n" + "\n".join(field_lines)
     ).strip()
+
 
 if __name__ == "__main__":
 
