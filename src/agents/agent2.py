@@ -167,19 +167,19 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
     extra = ""
     if rewrite_count > 0:
         extra = (
-            f"\n\nЭто попытка повторного поиска (номер {rewrite_count}).\n"
-            f"Причина REWRITE: {state.get('check_reason', '')}\n"
-            f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n"
-            f"Поля требующие повторного поиска: {state.get('fields_to_rewrite', [])}\n"
-            f"Предыдущий JSON-ответ: {state.get('answer', '')}\n"
-            f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n"
-            f"Предыдущие reranker_prompts: {state.get('reranker_prompts', [])}\n"
+            f"\n\nЭто попытка повторного поиска (номер {rewrite_count}).\n\n"
+            f"Причина REWRITE: {state.get('check_reason', '')}\n\n"
+            f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n\n"
+            f"Поля требующие повторного поиска: {state.get('fields_to_rewrite', [])}\n\n"
+            # f"Предыдущий JSON-ответ: {state.get('answer', '')}\n\n"
+            # f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n\n"
+            # f"Предыдущие reranker_prompts: {state.get('reranker_prompts', [])}\n\n"
             "Сгенерируй новые rag_prompts и reranker_prompts, чтобы закрыть пробелы."
         )
 
     human = HumanMessage(
         content=(
-            f"Запрос пользователя:\n{input_query}\n"
+            f"Запрос пользователя:\n{input_query}"
             f"{extra}"
         )
     )
