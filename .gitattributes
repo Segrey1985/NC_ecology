@@ -1,0 +1,7 @@
+# Сделать LF стандартом для всех текстовых файлов по умолчанию
+* text=auto eol=lf
+
+# Явно указать для специфичных файлов
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
