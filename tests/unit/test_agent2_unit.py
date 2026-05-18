@@ -325,6 +325,8 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
             "rag_contexts": ["ctx1", "ctx2"],
             "output_model": Out,
             "answer": '{"x":[],"y":"keep"}',
+            "fields_to_rewrite": ["x"],
+            "verified_fields": ["y"],
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",

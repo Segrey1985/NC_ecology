@@ -54,10 +54,12 @@ class Agent2State(TypedDict):
     answer: str
     output_model: type[BaseModel]
 
-    # optional loop (rewrite_focus из check при REWRITE)
+    # optional loop (rewrite_focus и fields_to_rewrite из check при REWRITE)
     check_decision: Literal["OK", "REWRITE"]
     check_reason: str
     rewrite_focus: str
+    fields_to_rewrite: list[str]
+    verified_fields: Annotated[list[str], add]
     rewrite_count: int
 
 
@@ -168,6 +170,7 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
             f"\n\nЭто попытка повторного поиска (номер {rewrite_count}).\n"
             f"Причина REWRITE: {state.get('check_reason', '')}\n"
             f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n"
+            f"Поля требующие повторного поиска: {state.get('fields_to_rewrite', [])}\n"
             f"Предыдущий JSON-ответ: {state.get('answer', '')}\n"
             f"Предыдущие rag_prompts: {state.get('rag_prompts', [])}\n"
             f"Предыдущие reranker_prompts: {state.get('reranker_prompts', [])}\n"
@@ -226,29 +229,36 @@ def rag_search_node(state: Agent2State) -> Agent2State:
 
 def answer_node(state: Agent2State) -> Agent2State:
 
-    def update_previous_answer_with_new_answer(previous_answer: str | None, new_answer: str) -> str:
-        """Возвращает прошлый ответ, обновленный текущим ответом"""
+    def update_previous_answer_with_new_answer(
+        previous_answer: str | None,
+        new_answer: str,
+        fields_to_rewrite: list[str],
+    ) -> str:
+        """Возвращает прошлый ответ, обновленный текущим ответом."""
         
-        def _select_fields_to_update(previous_answer: str) -> list[str]:
-            dct = json.loads(previous_answer)
-            fields_to_update = [k for k, v in dct.items() if bool(v) is False]
-            return fields_to_update
-        
+        # если есть прошлый ответ - обновляем его
         if previous_answer:
-            updated_answer = json.loads(previous_answer)  # начинаем обновлять прошлый ответ
-            new_answer = json.loads(new_answer)
-            fields_to_update = _select_fields_to_update(previous_answer)
-            for field in fields_to_update:
-                updated_answer[field] = new_answer[field]
+            updated_answer = json.loads(previous_answer)
+            new_answer_dict = json.loads(new_answer)
+            
+            # если есть прошлый ответ, но отсутствует список полей для обновления - обновляем все
+            if not fields_to_rewrite:
+                logger.warning(
+                    "[update answer] (есть previous_answer; нет fields_to_rewrite): перезапишем все поля ответа"
+                )
+                return new_answer
+            
+            for field in fields_to_rewrite:
+                updated_answer[field] = new_answer_dict[field]
             return json.dumps(updated_answer, ensure_ascii=False)
-        else:
-            return new_answer
-    
+        return new_answer
+
     llm = PARAMS_2.llm
     input_query = state["input_query"]
     rag_context = state["rag_context"]
     output_model = state["output_model"]
     previous_answer = state.get("answer")
+    fields_to_rewrite = state.get("fields_to_rewrite", [])
 
     system_message = SystemMessage(
         "Ты помощник по извлечению данных по строительному проекту.\n"
@@ -272,7 +282,9 @@ def answer_node(state: Agent2State) -> Agent2State:
     try:
         current_response = llm.with_structured_output(output_model, strict=True).invoke(messages)
         new_answer = current_response.model_dump_json()
-        updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
+        updated_answer = update_previous_answer_with_new_answer(
+            previous_answer, new_answer, fields_to_rewrite
+        )
         return {"answer": updated_answer, "rag_contexts": [rag_context]}
     
     except Exception:
@@ -307,7 +319,9 @@ def answer_node(state: Agent2State) -> Agent2State:
                 state['output_model'], str(getattr(raw, "content", raw))
             )
             new_answer = response_json
-            updated_answer = update_previous_answer_with_new_answer(previous_answer, new_answer)
+            updated_answer = update_previous_answer_with_new_answer(
+                previous_answer, new_answer, fields_to_rewrite
+            )
             return {"answer": updated_answer, "rag_contexts": [rag_context]}
         except Exception:
             logger.exception(
@@ -330,6 +344,14 @@ class AnswerCheck(BaseModel):
         None,
         description="Что именно нужно найти/уточнить при следующей генерации retrieval-промптов.",
     )
+    fields_to_rewrite: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Имена полей из JSON-ответа, которые нужно перезаписать при следующем извлечении. "
+            "Пустой список при decision=OK. При decision=REWRITE — перечисли поля с ошибочными, "
+            "неподтверждёнными контекстом или отсутствующими значениями."
+        ),
+    )
 
 
 def check_node(state: Agent2State) -> Agent2State:
@@ -338,29 +360,59 @@ def check_node(state: Agent2State) -> Agent2State:
     rag_contexts = state["rag_contexts"]
     answer = state["answer"]
     
+    output_model = state["output_model"]
+    
+    # все поля схемы
+    schema_field_names = list(output_model.model_fields.keys())
+    
+    # "хорошие" поля по которым не было вопросов
+    old_verified_fields = state.get("verified_fields", [])
+
+    # поля требующие проверки
+    _fields_need_to_check = list(set(schema_field_names) - set(old_verified_fields))
+    if sorted(_fields_need_to_check) == sorted(schema_field_names):
+        _fields_need_to_check = 'все поля.'
+
     system_message = SystemMessage(
         "Проверь, можно ли считать ответ корректным заполнением схемы на основе RAG-контекста.\n"
-        "Верни OK, если ответ можно использовать.\n"
+        "Проверяй только __поля_требующие_проверки__.\n"
+        "Верни OK, если ответ можно использовать; fields_to_rewrite при этом — пустой список.\n"
         "Верни REWRITE, если RAG-контекст не даёт достаточно данных/есть явные пробелы и нужно "
         "переформулировать запрос для поиска.\n"
+        "При REWRITE укажи в fields_to_rewrite имена полей JSON, которые нужно перезаписать "
+        "(некорректные, неподтверждённые контекстом, пустые при наличии данных в задаче).\n"
+        "Используй только имена полей из переданного списка допустимых полей схемы."
     )
     messages = [
         system_message,
         HumanMessage(
             content=(
                 f"Задача (что нужно извлечь):\n{input_query}\n\n"
+                f"__поля_требующие_проверки__: {_fields_need_to_check}\n\n"
+                f"Допустимые поля схемы: {schema_field_names}\n\n"
                 f"RAG-контекст:\n{'\n'.join(rag_contexts)}\n\n"
                 f"Ответ (JSON):\n{answer}"
             )
         ),
     ]
 
-    check = llm.with_structured_output(AnswerCheck, strict=True).invoke(messages)
+    response = llm.with_structured_output(AnswerCheck, strict=True).invoke(messages)
+    
+    # берем поля для перезаписи и исключаем из них "хорошие" поля
+    fields_to_rewrite = [field for field in response.fields_to_rewrite
+                         if ((field in schema_field_names) and (field not in old_verified_fields))]
+    
+    # добавляем новые "хорошие" поля = все поля - поля для перезаписи
+    verified_fields = [field for field in list(set(schema_field_names) - set(fields_to_rewrite))
+                       if field not in old_verified_fields]
+
     return {
-        "check_decision": check.decision,
-        "check_reason": check.reason,
-        "rewrite_focus": check.rewrite_focus or "",
-        "output_model": state["output_model"]  # для логов
+        "check_decision": response.decision,
+        "check_reason": response.reason,
+        "rewrite_focus": response.rewrite_focus or "",
+        "fields_to_rewrite": fields_to_rewrite,
+        "verified_fields": verified_fields,  # add без [] т.к. verified_fields: list
+        "output_model": output_model,
     }
 
 
