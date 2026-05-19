@@ -1,13 +1,13 @@
 import re
 import glob
 import pypdf
-import pathlib
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Optional, get_args
 
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.alias_generators import to_pascal
-from pdfminer.layout import LTTextBox, LTTextLine
+from pdfminer.layout import LTTextBox, LTTextLine, LTTextContainer
 from pdfminer.high_level import extract_pages as extract_pages_miner
 from langchain_core.messages import (
     HumanMessage,
@@ -88,6 +88,28 @@ def extract_pages(
             input_pdf_file.close()
 
 
+def extract_pages_as_list_with_miner(pdf: str | Path | bytes) -> list[str]:
+    """Извлекает текст из PDF постранично."""
+
+    if isinstance(pdf, bytes):
+        pdf_source = BytesIO(pdf)
+    else:
+        pdf_source = pdf
+
+    pages: list[str] = []
+
+    for page_layout in extract_pages_miner(pdf_source):
+        page_text_parts: list[str] = []
+
+        for element in page_layout:
+            if isinstance(element, LTTextContainer):
+                page_text_parts.append(element.get_text())
+
+        pages.append("".join(page_text_parts).strip())
+
+    return pages
+
+
 def extract_text_with_miner_coords(
     pdf_path,
     y_tolerance: float = 5,
@@ -98,7 +120,7 @@ def extract_text_with_miner_coords(
         0.07,
         0.07,
     ),  # (top, right, bottom, left)
-):
+) ->list[str]:
     """
     Извлекает текст из PDF с координатами строк + фильтрация областей страницы.
 
@@ -247,42 +269,27 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
 
 
 def find_pages_index_by_text(
-    input_pdf: str | bytes, text: str, max_len: int | None = None
+    input_pdf: str, text: str, max_len: int | None = None
 ) -> list[int]:
     """Возвращает индексы страниц, содержащих `text`"""
 
     if not text:
         return []
 
-    if isinstance(input_pdf, bytes):
-        input_pdf_file = BytesIO(input_pdf)
-    else:
-        input_pdf_file = open(input_pdf, "rb")
+    result_pages: list[int] = []
+    
+    pages_list = extract_text_with_miner_coords(input_pdf)
+    for page_idx, page_text in enumerate(pages_list):
+        # Нормализуем переносы/табуляции
+        page_text = " ".join(page_text.replace("\t", " ").split())
+        if text.strip() in page_text:
+            result_pages.append(page_idx)
 
-    try:
-        reader = pypdf.PdfReader(input_pdf_file)
+        if max_len and len(result_pages) == max_len:
+            return result_pages
 
-        result_pages: list[int] = []
+    return result_pages
 
-        for page_idx, page in enumerate(reader.pages):
-            page_content: list[str] = extract_text_with_miner_coords(
-                input_pdf_file,
-                page_numbers=[page_idx],
-            )
-            page_text = page_content[0]
-            # Нормализуем переносы/табуляции
-            page_text = " ".join(page_text.replace("\t", " ").split())
-            if text.strip() in page_text:
-                result_pages.append(page_idx)
-
-            if max_len and len(result_pages) == max_len:
-                return result_pages
-
-        return result_pages
-
-    finally:
-        if not isinstance(input_pdf, bytes):
-            input_pdf_file.close()
 
 
 # ___ LangGraph ___
@@ -524,6 +531,15 @@ def build_input_query(model: type[BaseModel]) -> str:
 
 
 if __name__ == "__main__":
+    
+    # найти номера страниц файла, где заголовком будет text1, text2
+    
+    text1 = "ВОЗДЕЙСТВИЕ ОБРАЗУЮЩИХСЯ НА ОБЪЕКТЕ ОТХОДОВ"
+    text2 = "5.2. Оценка класса опасности отходов проектируемого объекта на стадии строительства"
+    for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
+        print(page1 := find_pages_index_by_text(f, text=text1, max_len=2))
+        print(page2 := find_pages_index_by_text(f, text=text2, max_len=2))
+        print('-------------')
 
     # найти номер страницы файла, где заголовком будет text
 
@@ -554,10 +570,10 @@ if __name__ == "__main__":
 
     # test extract_text_with_miner_coords()
 
-    text = extract_text_with_miner_coords(
-        r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\1_ОК.17.24СТ-ПЗ.pdf",
-        ignore=(0.01, 0.01, 0.07, 0.07),
-    )
-    print("\n".join(text))
-
-    pass
+    # text = extract_text_with_miner_coords(
+    #     r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\1_ОК.17.24СТ-ПЗ.pdf",
+    #     ignore=(0.01, 0.01, 0.07, 0.07),
+    # )
+    # print("\n".join(text))
+    #
+    # pass
