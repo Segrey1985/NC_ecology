@@ -20,6 +20,7 @@ from src.utils.utils import (
     filter_mode_payload_and_validate,
     filter_mode_assembly_to_docx_context,
     build_input_query,
+    update_with_table_placeholders
 )
 from src.templates.docx_template_engine import fill_docx_template
 
@@ -92,6 +93,7 @@ def thread_run_graph_for_model(
 def main(
     template_docx_path: Path | None,
     project_parts_path: Path | None,
+    table_placeholders_path: Path | None,
     output_path: Path,
     chapter_module_path: str,
     collection_name: str = "main",
@@ -181,6 +183,7 @@ def main(
             if template_docx_path:
                 assembly_module_path = chapter_module_path + ".assembly"
                 assembly_model = pick_assembly_model(assembly_module_path)
+            
                 if test_mode == "filter":
                     data = filter_mode_payload_and_validate(assembly_model, results)
                     data_dict = filter_mode_assembly_to_docx_context(
@@ -191,6 +194,10 @@ def main(
                 else:
                     data = assembly_model.model_validate(results)
                     data_dict = data.model_dump(mode="json")
+                
+                if table_placeholders_path:
+                    update_with_table_placeholders(data_dict, table_placeholders_path=table_placeholders_path)
+                
                 result_template_out_path = (
                     output_path / f"{chapter_module_path.split('.')[-1]}.docx"
                 )
@@ -219,6 +226,7 @@ if __name__ == "__main__":
     main(
         template_docx_path=Path("src/ecology_chapters/chapter1/template.docx"),
         project_parts_path=None,
+        table_placeholders_path=Path("src/ecology_chapters/chapter1/table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter1",
         collection_name="all",

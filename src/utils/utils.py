@@ -1,4 +1,5 @@
 import re
+import json
 import glob
 import pypdf
 from io import BytesIO
@@ -32,6 +33,12 @@ def format_rag_context(chunks: list[str]) -> str:
     if not chunks:
         return "Релевантный контекст не найден."
     return "\n\n".join(f"[{idx}] {chunk}" for idx, chunk in enumerate(chunks, start=1))
+
+
+def pascal_to_snake(name: str) -> str:
+    """Facility → facility, NearestObjects → nearest_objects."""
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 # ___ PDF ___
@@ -355,6 +362,26 @@ def print_chunk(chunk):
             _safe_print(f"content:\n{message.content if message.content else 'None'}")
 
 
+def build_input_query(model: type[BaseModel]) -> str:
+    """Генерация input_query на основе pydantic-класса."""
+    doc = (inspect.getdoc(model) or "").strip()
+    fields = getattr(model, "model_fields", {}) or {}
+
+    field_lines: list[str] = []
+    for f_name, f_info in fields.items():
+        desc = getattr(f_info, "description", None)
+        if desc:
+            field_lines.append(f"- {f_name}: {desc}")
+        else:
+            field_lines.append(f"- {f_name}")
+
+    return (
+        f"Заполни модель `{model.__name__}`.\n"
+        f"Описание: {doc or '—'}\n"
+        "Поля:\n" + "\n".join(field_lines)
+    ).strip()
+
+
 # ___ inspect & importlib ___
 
 
@@ -384,50 +411,84 @@ def iter_models_from_module(module_path: str) -> list[type[BaseModel]]:
     return out
 
 
-def filter_models_by_names(
-    models: list[type[BaseModel]],
-    names: list[str] | None,
-) -> list[type[BaseModel]]:
-    """None — без фильтра, иначе только модели с именами из `names`."""
-    if names is None:
-        return models
-    allowed = set(names)
-    return [m for m in models if m.__name__ in allowed]
+def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
+    """
+    Достаём единственную корневую модель сборки из `<chapter>.assembly`.
+    Ищем BaseModel-классы, экспортированные в модуле (в т.ч. собранные через create_model).
+    """
+    module = importlib.import_module(assembly_module_path)
+
+    candidates: list[type[BaseModel]] = []
+    for _name, obj in vars(module).items():
+        if not inspect.isclass(obj):
+            continue
+        if not issubclass(obj, BaseModel):
+            continue
+        if obj is BaseModel:
+            continue
+        candidates.append(obj)
+
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"В модуле `{assembly_module_path}` ожидается ровно 1 BaseModel-класс, "
+            f"найдено: {len(candidates)}."
+        )
+
+    return candidates[0]
 
 
-def get_active_model_names(chapter_module_path: str) -> list[str] | None:
-    """Читает ACTIVE_MODEL_NAMES из `<chapter>._debug_models` (для test_mode='filter')."""
-    try:
-        module = importlib.import_module(f"{chapter_module_path}._debug_models")
-    except ModuleNotFoundError:
-        return None
-    return getattr(module, "ACTIVE_MODEL_NAMES", None)
+def build_chapter_assembly_model(
+    models_module_path: str,
+    *,
+    model_name: str = "ChapterData",
+) -> type[BaseModel]:
+    """
+    Собирает корневую pydantic-модель главы из всех моделей в `*.models`.
+    Поля опциональны — можно валидировать и рендерить docx по частичному JSON.
+    """
+    field_defs: dict[str, tuple[Any, None]] = {}
+    for model_cls in iter_models_from_module(models_module_path):
+        field_defs[pascal_to_snake(model_cls.__name__)] = (model_cls | None, None)
+
+    return create_model(
+        model_name,
+        __config__=ConfigDict(
+            alias_generator=to_pascal,
+            populate_by_name=True,
+        ),
+        **field_defs,
+    )
 
 
 def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
     """Модели главы с фильтром из `_debug_models.py` (только test_mode='filter' в main2)."""
+    
+    def filter_models_by_names(
+        models: list[type[BaseModel]],
+        names: list[str] | None,
+    ) -> list[type[BaseModel]]:
+        """None — без фильтра, иначе только модели с именами из `names`."""
+        if names is None:
+            return models
+        allowed = set(names)
+        return [m for m in models if m.__name__ in allowed]
+    
+    
+    def get_debug_model_names(chapter_module_path: str) -> list[str] | None:
+        """Читает ACTIVE_MODEL_NAMES из `<chapter>._debug_models` (для test_mode='filter')."""
+        try:
+            module = importlib.import_module(f"{chapter_module_path}._debug_models")
+        except ModuleNotFoundError:
+            return None
+        return getattr(module, "ACTIVE_MODEL_NAMES", None)
+    
     return filter_models_by_names(
         iter_models_from_module(f"{chapter_module_path}.models"),
-        get_active_model_names(chapter_module_path),
+        get_debug_model_names(chapter_module_path),
     )
 
 
-def pascal_to_snake(name: str) -> str:
-    """Facility → facility, NearestObjects → nearest_objects."""
-    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
-
-
-def _nested_model_type(annotation: Any) -> type[BaseModel] | None:
-    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
-        return annotation
-    for arg in get_args(annotation):
-        if arg is type(None):
-            continue
-        if inspect.isclass(arg) and issubclass(arg, BaseModel):
-            return arg
-    return None
-
+# ___ filter_mode ___
 
 def _list_item_type(annotation: Any) -> Any | None:
     if get_origin(annotation) is list:
@@ -459,27 +520,15 @@ def _docx_placeholder_value(section_name: str, field_name: str, annotation: Any)
     return [placeholder]
 
 
-def build_chapter_assembly_model(
-    models_module_path: str,
-    *,
-    model_name: str = "ChapterData",
-) -> type[BaseModel]:
-    """
-    Собирает корневую pydantic-модель главы из всех моделей в `*.models`.
-    Поля опциональны — можно валидировать и рендерить docx по частичному JSON.
-    """
-    field_defs: dict[str, tuple[Any, None]] = {}
-    for model_cls in iter_models_from_module(models_module_path):
-        field_defs[pascal_to_snake(model_cls.__name__)] = (model_cls | None, None)
-
-    return create_model(
-        model_name,
-        __config__=ConfigDict(
-            alias_generator=to_pascal,
-            populate_by_name=True,
-        ),
-        **field_defs,
-    )
+def _nested_model_type(annotation: Any) -> type[BaseModel] | None:
+    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in get_args(annotation):
+        if arg is type(None):
+            continue
+        if inspect.isclass(arg) and issubclass(arg, BaseModel):
+            return arg
+    return None
 
 
 def filter_mode_payload_and_validate(
@@ -540,50 +589,20 @@ def filter_mode_assembly_to_docx_context(
     return ctx
 
 
-def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
-    """
-    Достаём единственную корневую модель сборки из `<chapter>.assembly`.
-    Ищем BaseModel-классы, экспортированные в модуле (в т.ч. собранные через create_model).
-    """
-    module = importlib.import_module(assembly_module_path)
-
-    candidates: list[type[BaseModel]] = []
-    for _name, obj in vars(module).items():
-        if not inspect.isclass(obj):
-            continue
-        if not issubclass(obj, BaseModel):
-            continue
-        if obj is BaseModel:
-            continue
-        candidates.append(obj)
-
-    if len(candidates) != 1:
-        raise RuntimeError(
-            f"В модуле `{assembly_module_path}` ожидается ровно 1 BaseModel-класс, "
-            f"найдено: {len(candidates)}."
-        )
-
-    return candidates[0]
+# ____________ main ____________
 
 
-def build_input_query(model: type[BaseModel]) -> str:
-    """Генерация input_query на основе pydantic-класса."""
-    doc = (inspect.getdoc(model) or "").strip()
-    fields = getattr(model, "model_fields", {}) or {}
-
-    field_lines: list[str] = []
-    for f_name, f_info in fields.items():
-        desc = getattr(f_info, "description", None)
-        if desc:
-            field_lines.append(f"- {f_name}: {desc}")
-        else:
-            field_lines.append(f"- {f_name}")
-
-    return (
-        f"Заполни модель `{model.__name__}`.\n"
-        f"Описание: {doc or '—'}\n"
-        "Поля:\n" + "\n".join(field_lines)
-    ).strip()
+def update_with_table_placeholders(data_dict: dict, table_placeholders_path: Path) -> None:
+    
+    with open(table_placeholders_path, "r", encoding='utf-8') as f:
+        table_placeholders: list[dict] = json.load(f)
+        
+    if not isinstance(table_placeholders, list):
+        logger.error("table_placeholders должны быть списком словарей.")
+    
+    for placeholder_dict in table_placeholders:
+        name_value_dict = {placeholder_dict["key"]: placeholder_dict["value"]}
+        data_dict.update(name_value_dict)
 
 
 if __name__ == "__main__":

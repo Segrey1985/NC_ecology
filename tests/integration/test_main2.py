@@ -39,6 +39,7 @@ def test_main2_test_mode_on_processes_only_first_model_and_cleanup():
         main(
             template_docx_path=None,
             project_parts_path=parts_dir,
+            table_placeholders_path=Path("src/ecology_chapters/chapter1/table_placeholders.json"),
             output_path=out_dir,
             chapter_module_path="src.ecology_chapters.chapter1",
             collection_name=collection_name,

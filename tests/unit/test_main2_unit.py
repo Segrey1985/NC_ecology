@@ -100,6 +100,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     main2.main(
         template_docx_path=None,
         project_parts_path=None,
+        table_placeholders_path=None,
         output_path=out_dir,
         chapter_module_path="does.not.matter",
         collection_name=collection_name,
@@ -144,6 +145,7 @@ def test_main_filter_mode_uses_iter_chapter_models(
     main2.main(
         template_docx_path=None,
         project_parts_path=None,
+        table_placeholders_path=None,
         output_path=tmp_path / "out",
         chapter_module_path="x.y",
         collection_name="main",
@@ -164,6 +166,7 @@ def test_main_raises_if_no_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
         main(
             template_docx_path=None,
             project_parts_path=None,
+            table_placeholders_path=None,
             output_path=tmp_path / "out",
             chapter_module_path="x.y",
             collection_name="main",
