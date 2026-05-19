@@ -112,17 +112,9 @@ class Ownership(BaseModel):
 class SanitaryZone(BaseModel):
     """Санитарно-защитная зона"""
 
-    include_description: bool = Field(
-        True,
-        description="Включать ли описание СЗЗ в текст главы",
-    )
     hazard_class: Optional[HazardClass] = Field(
         None,
         description="Класс опасности по СанПиН",
-    )
-    size_m: Optional[int] = Field(
-        None,
-        description="Размер СЗЗ в метрах (типичные значения: 50, 100, 300, 500, 1000).",
     )
     sanpin_reference: Optional[str] = Field(
         None,

@@ -6,6 +6,7 @@
 __*
 /checkpoints
 /data
+.~*
 
 # User-specific stuff
 .idea/**/workspace.xml
