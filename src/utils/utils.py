@@ -3,7 +3,7 @@ import glob
 import pypdf
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional, get_args
+from typing import Any, Optional, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.alias_generators import to_pascal
@@ -429,6 +429,36 @@ def _nested_model_type(annotation: Any) -> type[BaseModel] | None:
     return None
 
 
+def _list_item_type(annotation: Any) -> Any | None:
+    if get_origin(annotation) is list:
+        args = get_args(annotation)
+        return args[0] if args else Any
+    for arg in get_args(annotation):
+        if arg is type(None):
+            continue
+        item_type = _list_item_type(arg)
+        if item_type is not None:
+            return item_type
+    return None
+
+
+def _docx_placeholder_value(section_name: str, field_name: str, annotation: Any) -> object:
+    placeholder = "{{ " + f"{section_name}.{field_name}" + " }}"
+    item_type = _list_item_type(annotation)
+    if item_type is None:
+        return placeholder
+    if inspect.isclass(item_type) and issubclass(item_type, BaseModel):
+        return [
+            {
+                subfield_name: "{{ "
+                + f"{section_name}.{field_name}.{subfield_name}"
+                + " }}"
+                for subfield_name in item_type.model_fields
+            }
+        ]
+    return [placeholder]
+
+
 def build_chapter_assembly_model(
     models_module_path: str,
     *,
@@ -452,7 +482,7 @@ def build_chapter_assembly_model(
     )
 
 
-def filter_payload_and_validate(
+def filter_mode_payload_and_validate(
     assembly_model: type[BaseModel],
     results: dict[str, object],
 ) -> BaseModel:
@@ -468,19 +498,45 @@ def filter_payload_and_validate(
     return assembly_model.model_validate(payload)
 
 
-def assembly_to_docx_context(
+def filter_mode_assembly_to_docx_context(
     assembly_model: type[BaseModel],
     data: BaseModel,
+    *,
+    preserve_unfilled: bool = False,
 ) -> dict[str, object]:
     """
     Контекст для docxtpl: snake_case-ключи как в шаблоне.
     Незаполненные секции — пустой dict, чтобы Jinja не падал на partial-прогоне.
+    В filter_mode можно сохранить плейсхолдеры как строки `{{ section.field }}`.
     """
     dumped = data.model_dump(mode="json")
     ctx: dict[str, object] = {}
-    for field_name in assembly_model.model_fields:
+    for field_name, field_info in assembly_model.model_fields.items():
         value = dumped.get(field_name)
-        ctx[field_name] = value if value is not None else {}
+        if not preserve_unfilled:
+            ctx[field_name] = value if value is not None else {}
+            continue
+
+        nested = _nested_model_type(field_info.annotation)
+        if nested is None:
+            ctx[field_name] = value
+            continue
+
+        placeholders = {
+            subfield_name: _docx_placeholder_value(
+                field_name,
+                subfield_name,
+                subfield_info.annotation,
+            )
+            for subfield_name, subfield_info in nested.model_fields.items()
+        }
+        if isinstance(value, dict):
+            ctx[field_name] = {
+                key: placeholders[key] if item is None or item == [] else item
+                for key, item in {**placeholders, **value}.items()
+            }
+        else:
+            ctx[field_name] = placeholders
     return ctx
 
 

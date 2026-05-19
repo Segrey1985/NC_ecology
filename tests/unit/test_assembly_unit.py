@@ -2,8 +2,8 @@ from pydantic import BaseModel
 
 from src.ecology_chapters.chapter1.assembly import Chapter1Data
 from src.utils.utils import (
-    filter_payload_and_validate,
-    assembly_to_docx_context,
+    filter_mode_payload_and_validate,
+    filter_mode_assembly_to_docx_context,
     build_chapter_assembly_model,
     iter_models_from_module,
     pascal_to_snake,
@@ -27,7 +27,7 @@ def test_assemble_partial_results():
         "src.ecology_chapters.chapter1.models",
         model_name="Chapter1Data",
     )
-    data = filter_payload_and_validate(
+    data = filter_mode_payload_and_validate(
         assembly,
         {
             "Facility": {
@@ -44,9 +44,14 @@ def test_assemble_partial_results():
             }
         },
     )
-    ctx = assembly_to_docx_context(assembly, data)
+    ctx = filter_mode_assembly_to_docx_context(assembly, data)
     assert ctx["facility"]["type_nominative"] == "котельная"
     assert ctx["land_plot"] == {}
+
+    ctx_filter = filter_mode_assembly_to_docx_context(assembly, data, preserve_unfilled=True)
+    assert ctx_filter["facility"]["type_nominative"] == "котельная"
+    assert ctx_filter["land_plot"]["area_sqm"] == "{{ land_plot.area_sqm }}"
+    assert ctx_filter["structures"]["structures"] == ["{{ structures.structures }}"]
 
 
 def test_pick_assembly_model_finds_dynamic_chapter1():

@@ -17,8 +17,8 @@ from src.utils.utils import (
     iter_models_from_module,
     iter_chapter_models,
     pick_assembly_model,
-    filter_payload_and_validate,
-    assembly_to_docx_context,
+    filter_mode_payload_and_validate,
+    filter_mode_assembly_to_docx_context,
     build_input_query,
 )
 from src.templates.docx_template_engine import fill_docx_template
@@ -182,8 +182,12 @@ def main(
                 assembly_module_path = chapter_module_path + ".assembly"
                 assembly_model = pick_assembly_model(assembly_module_path)
                 if test_mode == "filter":
-                    data = filter_payload_and_validate(assembly_model, results)
-                    data_dict = assembly_to_docx_context(assembly_model, data)
+                    data = filter_mode_payload_and_validate(assembly_model, results)
+                    data_dict = filter_mode_assembly_to_docx_context(
+                        assembly_model,
+                        data,
+                        preserve_unfilled=True,
+                    )
                 else:
                     data = assembly_model.model_validate(results)
                     data_dict = data.model_dump(mode="json")
@@ -213,17 +217,11 @@ if __name__ == "__main__":
 
     base = Path(__file__).parent
     main(
-        template_docx_path=base
-        / "data"
-        / "IN"
-        / "project1"
-        / "schemas"
-        / "1_Общие_сведения"
-        / "chapter1_template.docx",
+        template_docx_path=Path("src/ecology_chapters/chapter1/template.docx"),
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter1",
         collection_name="all",
-        test_mode="off",
+        test_mode="filter",
         max_workers=8,
     )
