@@ -33,6 +33,12 @@ models = {
     "glm5": "glm-5",
 }
 
+embeddings_list = {
+    "Qwen/Qwen3-Embedding-8B": {"is_local": True, "length": 4096},
+    "text-embedding-3-small": {"is_local": False, "length": 1536},
+    "text-embedding-3-large": {"is_local": False, "length": 3072},
+}
+
 rerankers_list = {
     "qilowoq/bge-reranker-v2-m3-en-ru": {"is_local": True},
     "rerank-4-pro": {"is_local": False},
@@ -52,7 +58,7 @@ class Config(BaseSettings):
     MODEL_NAME: str = models["gpt54mini"]
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
-    EMBEDDINGS_MODEL_NAME: str = "Qwen/Qwen3-Embedding-8B"
+    EMBEDDINGS_MODEL_NAME: str = "text-embedding-3-large"
     EMBEDDINGS_LOCAL: bool = False
     QDRANT_URL: str = "http://localhost:6333"
     RERANKER_MODEL: str = "rerank-4-pro"
@@ -92,7 +98,11 @@ def dynamic_config(func: Callable) -> Callable:
     @wraps(func)
     def wrapper(*args, **kwargs):
         if kwargs.get("test_mode") != "off":
+            
+            # модели применяемые для тестирования агента
             cfg.RERANKER_MODEL = "rerank-v3.5"
+            cfg.EMBEDDINGS_MODEL_NAME = "text-embedding-3-small"
+
         result = func(*args, **kwargs)
         return result
     return wrapper

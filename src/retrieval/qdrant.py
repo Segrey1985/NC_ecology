@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, ScoredPoint
@@ -11,16 +12,24 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config.config_file import cfg
+from config.config_file import cfg, embeddings_list
 from src.utils.logger import logger
 from src.utils.utils import extract_text_with_miner_coords
 from src.retrieval.embeddings import load_local_embedder, init_openai_embedder
 
-if cfg.EMBEDDINGS_LOCAL:
-    embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_NAME)
-else:
-    embedder = init_openai_embedder()
 
+@lru_cache(maxsize=None)
+def init_embedder(model_name: str):
+    embedding_model = embeddings_list.get(model_name)
+    
+    if not embedding_model:
+        raise ValueError(f"{model_name} отсутствует в embeddings_list.")
+    
+    if embedding_model['is_local'] is True:
+        embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_NAME)
+    else:
+        embedder = init_openai_embedder(cfg.EMBEDDINGS_MODEL_NAME)
+    return embedder
 
 # _______________ QdrantService _______________
 
@@ -110,6 +119,7 @@ class QdrantService:
 def build_qdrant_service() -> QdrantService:
     """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
     client = QdrantClient(url=cfg.QDRANT_URL)
+    embedder = init_embedder(cfg.EMBEDDINGS_MODEL_NAME)
     return QdrantService(client=client, model=embedder)
 
 
@@ -156,7 +166,7 @@ class ProjectPart:
             raise ValueError(
                 "Cannot calculate vectors: ProjectPart.chunks list is empty"
             )
-        vectors = embedder.encode(self.chunks)
+        vectors = init_embedder(cfg.EMBEDDINGS_MODEL_NAME).encode(self.chunks)
         vectors = [
             vector if isinstance(vector, list) else vector.tolist()
             for vector in vectors

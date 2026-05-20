@@ -12,15 +12,15 @@ def load_local_embedder(model_name: str):
     model_path = models_dir / model_name_str
     device = cfg.DEVICE
     if os.path.exists(model_path):
-        logger.debug(f"[embedder] Loading local model from {model_path}...")
+        logger.debug(f"[embedder] [{model_name}] Loading local model from {model_path}...")
         embedder = SentenceTransformer(model_path.as_posix(), device=device)
     else:
-        logger.debug(f"[embedder] Loading model from HuggingFace...")
+        logger.debug(f"[embedder] [{model_name}] Loading model from HuggingFace...")
         embedder = SentenceTransformer(model_name, device=device)
         embedder.save(
             model_path
         )  # внутри метода save есть makedirs(..., exist_ok=True)
-    logger.debug(f"[embedder] Model loading complete.")
+    logger.debug(f"[embedder] [{model_name}] Model loading complete.")
     return embedder
 
 
@@ -28,12 +28,11 @@ def load_openai_embeddings_client() -> OpenAI:
     client = OpenAI(
         api_key=cfg.AI_TUNNEL_API_KEY, base_url="https://api.aitunnel.ru/v1/"
     )
-
     return client
 
 
 class OpenAIEmbedder:
-    def __init__(self, model="text-embedding-3-small"):
+    def __init__(self, model):
         self.client = load_openai_embeddings_client()
         self.model = model
 
@@ -50,8 +49,9 @@ class OpenAIEmbedder:
         return all_embeddings
 
 
-def init_openai_embedder():
-    return OpenAIEmbedder()
+def init_openai_embedder(model_name: str):
+    logger.debug(f"[embedder] [{model_name}] init OpenAI embedder...")
+    return OpenAIEmbedder(model=model_name)
 
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     vectors = embedder.encode(["раз", "два"], batch_size=2)
     print(vectors)
 
-    openai_embedder = init_openai_embedder()
+    openai_embedder = init_openai_embedder("text-embedding-3-small")
     vectors = openai_embedder.encode(["раз", "два"])
     print(vectors)
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     similarities = embedder.similarity(embeddings, embeddings)
     print(similarities.shape)
 
-    openai_embedder = init_openai_embedder()
+    openai_embedder = init_openai_embedder("text-embedding-3-small")
     embeddings = openai_embedder.encode(sentences, batch_size=32)
     print(type(embeddings))
     print(embeddings)

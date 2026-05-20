@@ -15,7 +15,7 @@ def test_main():
             template_docx_path=input_dir / "template.docx",
             placeholders_path=input_dir / "placeholders.json",
             table_placeholders_path=input_dir / "table_placeholders.json",
-            project_parts_path=None,
+            project_parts_path=base / "data" / "IN" / "project1" / "trim" / "mini",
             output_path=output_dir,
             collection_name="test_data",
             test_mode="on",
