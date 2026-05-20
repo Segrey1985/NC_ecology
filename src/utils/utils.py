@@ -59,7 +59,12 @@ def extract_pages(
     pages_to_keep: list[int],
     output_pdf_path: Optional[str] = None,
 ) -> Optional[bytes]:
-    """Извлечение страниц из PDF. Если output_pdf_path не задан, возвращает байты."""
+    """Извлечение страниц из PDF. Если output_pdf_path не задан, возвращает байты.
+    
+    :param input_pdf: Путь к pdf файлу или байты.
+    :param pages_to_keep: Оставляемые страницы (нумерация с 0).
+    :param output_pdf_path: Путь для сохранения обрезанного pdf (опционально).
+    """
 
     # Проверяем, что было передано: путь к файлу или байты
     if isinstance(input_pdf, bytes):
@@ -76,7 +81,7 @@ def extract_pages(
         # Извлекаем указанные страницы
         for page_num in valid_pages_to_keep:
             # Нумерация страниц в pypdf начинается с 0
-            writer.add_page(reader.pages[page_num - 1])
+            writer.add_page(reader.pages[page_num])
 
         if output_pdf_path:
             # Записываем результат в новый PDF файл
@@ -624,13 +629,33 @@ def update_with_table_placeholders(
 if __name__ == "__main__":
 
     # найти номера страниц файла, где заголовком будет text1, text2
-
-    text1 = "ВОЗДЕЙСТВИЕ ОБРАЗУЮЩИХСЯ НА ОБЪЕКТЕ ОТХОДОВ"
-    text2 = "5.2. Оценка класса опасности отходов проектируемого объекта на стадии строительства"
+    
+    text1 = "2. ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ"
+    text2 = "3. ВОЗДЕЙСТВИЕ ОБЪЕКТА ПРОЕКТИРОВАНИЯ НА АТМОСФЕРНЫЙ ВОЗДУХ"
+    
+    results = []
     for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
+        # print(f)
         print(page1 := find_pages_index_by_text(f, text=text1, max_len=2))
         print(page2 := find_pages_index_by_text(f, text=text2, max_len=2))
-        print("-------------")
+        # print("-------------")
+        results.append((f, page1[1], page2[1]))
+        
+    print(results)
+    
+    
+    def cut_between_and_save(file_path: str | Path, start, end) -> None:
+        """ Обрезать с X по Y и сохранить в out.pdf """
+        bytes_ = extract_pages(file_path, pages_to_keep=list(range(start, end)))
+        pth = Path(file_path) if isinstance(file_path, str) else file_path
+        new_name = pth.parent / f"cut_between_and_save_OUT" /pth.name
+        new_name.parent.mkdir(parents=True, exist_ok=True)
+        with open(new_name, "wb") as new_file:
+            new_file.write(bytes_)
+
+
+    for f, start, end in results:
+        cut_between_and_save(f, start, end)
 
     # найти номер страницы файла, где заголовком будет text
 
