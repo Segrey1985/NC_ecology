@@ -2,6 +2,7 @@ import re
 import json
 import glob
 import pypdf
+import pymupdf
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional, get_args, get_origin
@@ -127,7 +128,7 @@ def extract_text_with_miner_coords(
         0.07,
         0.07,
     ),  # (top, right, bottom, left)
-) ->list[str]:
+) -> list[str]:
     """
     Извлекает текст из PDF с координатами строк + фильтрация областей страницы.
 
@@ -226,14 +227,19 @@ def extract_text_with_miner_coords(
     return text_with_coords
 
 
+def extract_pages_as_list_with_pymupdf(pdf: Path | str | bytes) -> list[str]:
+    if isinstance(pdf, bytes):
+        doc = pymupdf.open(stream=pdf, filetype="pdf")
+    elif isinstance(pdf, (Path, str)):
+        doc = pymupdf.open(pdf)
+    else:
+        raise TypeError("Неверный тип аргумента `pdf`. Требуется `Path | str | bytes`")
+    return [page.get_text() for page in doc]
+
+
 def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | None:
     """
     Возвращает индекс страницы (нумерация с 0), где первой текстовой (буквенной) информацией является `text`.
-
-    Правило:
-    - из начала текста страницы игнорируются цифры, пробелы и прочие знаки;
-    - как только встречается первый символ-буква, оставшийся текст (с нормализованными пробелами)
-      должен начинаться с `text`.
     """
 
     if not text:
@@ -276,19 +282,26 @@ def find_page_index_by_first_text(input_pdf: str | bytes, text: str) -> int | No
 
 
 def find_pages_index_by_text(
-    input_pdf: str, text: str, max_len: int | None = None
+    pdf: Path | str | bytes, text: str, max_len: int | None = None
 ) -> list[int]:
     """Возвращает индексы страниц, содержащих `text`"""
 
     if not text:
         return []
 
+    if isinstance(pdf, bytes):
+        doc = pymupdf.open(stream=pdf, filetype="pdf")
+    elif isinstance(pdf, (Path, str)):
+        doc = pymupdf.open(pdf)
+    else:
+        raise TypeError("Неверный тип аргумента `pdf`. Требуется `Path | str | bytes`")
+
     result_pages: list[int] = []
-    
-    pages_list = extract_text_with_miner_coords(input_pdf)
-    for page_idx, page_text in enumerate(pages_list):
-        # Нормализуем переносы/табуляции
+
+    for page_idx, page in enumerate(doc):
+        page_text = page.get_text().strip()
         page_text = " ".join(page_text.replace("\t", " ").split())
+
         if text.strip() in page_text:
             result_pages.append(page_idx)
 
@@ -296,7 +309,6 @@ def find_pages_index_by_text(
             return result_pages
 
     return result_pages
-
 
 
 # ___ LangGraph ___
@@ -462,7 +474,7 @@ def build_chapter_assembly_model(
 
 def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
     """Модели главы с фильтром из `_debug_models.py` (только test_mode='filter' в main2)."""
-    
+
     def filter_models_by_names(
         models: list[type[BaseModel]],
         names: list[str] | None,
@@ -472,8 +484,7 @@ def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
             return models
         allowed = set(names)
         return [m for m in models if m.__name__ in allowed]
-    
-    
+
     def get_debug_model_names(chapter_module_path: str) -> list[str] | None:
         """Читает ACTIVE_MODEL_NAMES из `<chapter>._debug_models` (для test_mode='filter')."""
         try:
@@ -481,7 +492,7 @@ def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
         except ModuleNotFoundError:
             return None
         return getattr(module, "ACTIVE_MODEL_NAMES", None)
-    
+
     return filter_models_by_names(
         iter_models_from_module(f"{chapter_module_path}.models"),
         get_debug_model_names(chapter_module_path),
@@ -489,6 +500,7 @@ def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
 
 
 # ___ filter_mode ___
+
 
 def _list_item_type(annotation: Any) -> Any | None:
     if get_origin(annotation) is list:
@@ -503,7 +515,9 @@ def _list_item_type(annotation: Any) -> Any | None:
     return None
 
 
-def _docx_placeholder_value(section_name: str, field_name: str, annotation: Any) -> object:
+def _docx_placeholder_value(
+    section_name: str, field_name: str, annotation: Any
+) -> object:
     placeholder = "{{ " + f"{section_name}.{field_name}" + " }}"
     item_type = _list_item_type(annotation)
     if item_type is None:
@@ -592,29 +606,31 @@ def filter_mode_assembly_to_docx_context(
 # ____________ main ____________
 
 
-def update_with_table_placeholders(data_dict: dict, table_placeholders_path: Path) -> None:
-    
-    with open(table_placeholders_path, "r", encoding='utf-8') as f:
+def update_with_table_placeholders(
+    data_dict: dict, table_placeholders_path: Path
+) -> None:
+
+    with open(table_placeholders_path, "r", encoding="utf-8") as f:
         table_placeholders: list[dict] = json.load(f)
-        
+
     if not isinstance(table_placeholders, list):
         logger.error("table_placeholders должны быть списком словарей.")
-    
+
     for placeholder_dict in table_placeholders:
         name_value_dict = {placeholder_dict["key"]: placeholder_dict["value"]}
         data_dict.update(name_value_dict)
 
 
 if __name__ == "__main__":
-    
+
     # найти номера страниц файла, где заголовком будет text1, text2
-    
+
     text1 = "ВОЗДЕЙСТВИЕ ОБРАЗУЮЩИХСЯ НА ОБЪЕКТЕ ОТХОДОВ"
     text2 = "5.2. Оценка класса опасности отходов проектируемого объекта на стадии строительства"
     for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
         print(page1 := find_pages_index_by_text(f, text=text1, max_len=2))
         print(page2 := find_pages_index_by_text(f, text=text2, max_len=2))
-        print('-------------')
+        print("-------------")
 
     # найти номер страницы файла, где заголовком будет text
 
