@@ -226,12 +226,12 @@ if __name__ == "__main__":
 
     base = Path(__file__).parent
     main(
-        template_docx_path=Path("src/ecology_chapters/chapter1/template.docx"),
-        project_parts_path=None,
-        table_placeholders_path=Path("src/ecology_chapters/chapter1/table_placeholders.json"),
+        template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
+        project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\chapter2"),
+        table_placeholders_path=None,
         output_path=base / "data" / "OUT" / "project1",
-        chapter_module_path="src.ecology_chapters.chapter1",
-        collection_name="all",
-        test_mode="filter",
+        chapter_module_path="src.ecology_chapters.chapter2",
+        collection_name="chapter2",
+        test_mode="off",
         max_workers=8,
     )
