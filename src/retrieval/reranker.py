@@ -85,7 +85,7 @@ def rerank_with_api(
         (x["document"]["text"], x["relevance_score"])
         for x in response.json()["results"]
     ]
-    logger.debug(f"[api reranker] Re-ranking complete.")
+    logger.debug(f"[api reranker] [{model_name}] Re-ranking complete.")
     return reranked
 
 

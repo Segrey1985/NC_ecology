@@ -5,6 +5,7 @@ from typing import Literal
 
 from src.agents.agent import init_graph, PARAMS
 from config.langfuse_client import langfuse_config
+from config.config_file import dynamic_config
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.docx_template_engine import fill_docx_template
@@ -60,6 +61,7 @@ def _run_graph(
     return final_content
 
 
+@dynamic_config
 def main(
     template_docx_path: Path | None,
     placeholders_path: Path,
@@ -140,5 +142,5 @@ if __name__ == "__main__":
         project_parts_path=None,
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main",
-        test_mode="off",
+        test_mode="on",
     )

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent2 import init_graph_2, PARAMS_2
+from config.config_file import dynamic_config
 from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
 from src.utils.utils import (
@@ -90,6 +91,7 @@ def thread_run_graph_for_model(
         logger.remove(handler_id)
 
 
+@dynamic_config
 def main(
     template_docx_path: Path | None,
     project_parts_path: Path | None,

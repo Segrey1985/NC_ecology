@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from functools import wraps
+from collections.abc import Callable
+
 from src.utils.logger import logger
 
 warnings.filterwarnings(
@@ -32,7 +35,8 @@ models = {
 
 rerankers_list = {
     "qilowoq/bge-reranker-v2-m3-en-ru": {"is_local": True},
-    "rerank-4-pro": {"is_local": False}
+    "rerank-4-pro": {"is_local": False},
+    "rerank-v3.5": {"is_local": False}
 }
 
 
@@ -81,6 +85,18 @@ class Config(BaseSettings):
 
 
 cfg = Config()
+print(cfg)
+
+
+def dynamic_config(func: Callable) -> Callable:
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if kwargs.get("test_mode") != "off":
+            cfg.RERANKER_MODEL = "rerank-v3.5"
+        result = func(*args, **kwargs)
+        return result
+    return wrapper
+
 
 logger.info("\n\n\n\n\n---START----\n\n\n\n\n")
 logger.info(f"{cfg.DEVICE=}")
