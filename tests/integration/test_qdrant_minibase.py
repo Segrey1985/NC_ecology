@@ -21,7 +21,7 @@ def test_qdrant_minibase_from_trim_first3_and_cleanup():
         qdrant_service.create_collection(collection_name=collection_name)
 
         for pdf_path in pdfs:
-            part = ProjectPart(pdf_path)
+            part = ProjectPart(file_path=pdf_path, embedder=qdrant_service.model)
             part.run()
             qdrant_service.add_points_to_collection(
                 collection_name=collection_name,

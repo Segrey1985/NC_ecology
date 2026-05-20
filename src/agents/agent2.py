@@ -437,7 +437,9 @@ def init_graph_2(collection_name: str, project_parts_path: Path | None):
                 f"Аргумент project_parts_path не передан."
             )
         logger.info(f"[agent_2] Создаю новую коллекцию <{collection_name}>")
-        project_parts = create_project_parts(project_parts_path)
+        project_parts = create_project_parts(
+            project_parts_path=project_parts_path, embedder=PARAMS_2.qdrant_service.model
+        )
         create_collection(PARAMS_2.qdrant_service, collection_name)
         fill_collection(PARAMS_2.qdrant_service, collection_name, project_parts)
     else:

@@ -131,8 +131,9 @@ class ProjectPart:
     
     DISCIPLINE_BY_NUMBER = cfg.DISCIPLINE_BY_NUMBER
 
-    def __init__(self, file_path: Path) -> None:
+    def __init__(self, file_path: Path, embedder=None) -> None:
         self.file_path = file_path
+        self.embedder = embedder
         self.texts_by_page: Optional[list[str]] = None
         self.text: Optional[str] = None
         self.chunks: Optional[list[str]] = None
@@ -166,7 +167,11 @@ class ProjectPart:
             raise ValueError(
                 "Cannot calculate vectors: ProjectPart.chunks list is empty"
             )
-        vectors = init_embedder(cfg.EMBEDDINGS_MODEL_NAME).encode(self.chunks)
+        if not self.embedder:
+            raise ValueError(
+                "Cannot calculate vectors: embedder was not passed to ProjectPart __init__"
+            )
+        vectors = self.embedder.encode(self.chunks)
         vectors = [
             vector if isinstance(vector, list) else vector.tolist()
             for vector in vectors
@@ -222,18 +227,18 @@ class ProjectPart:
 # _______________ вспомогательные функции _______________
 
 
-def _collect_project_parts(folder_path: Path) -> list[ProjectPart]:
+def _collect_project_parts(folder_path: Path, embedder) -> list[ProjectPart]:
     """Ищет все файлы .pdf в директории и превращает их в list[ProjectPart]"""
     project_parts = []
     for file in folder_path.iterdir():
         if file.suffix == ".pdf":
-            project_parts.append(ProjectPart(file_path=file))
+            project_parts.append(ProjectPart(file_path=file, embedder=embedder))
     return project_parts
 
 
-def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
+def create_project_parts(project_parts_path: Path, embedder=None) -> list[ProjectPart]:
     """Собирает все .pdf файлы в директории, превращает их в list[ProjectPart] и вычисляет Point для qdrant"""
-    project_parts: list[ProjectPart] = _collect_project_parts(project_parts_path)
+    project_parts: list[ProjectPart] = _collect_project_parts(project_parts_path, embedder=embedder)
 
     def _run(part: ProjectPart) -> None:
         part.run()

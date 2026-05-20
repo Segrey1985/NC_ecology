@@ -1,12 +1,14 @@
 from pathlib import Path
 from src.retrieval.qdrant import ProjectPart, build_qdrant_service
+from src.retrieval.embeddings import init_openai_embedder
 
 
 def test_qdrant_service():
     project_part = ProjectPart(
         Path(
             r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-        )
+        ),
+        embedder=init_openai_embedder("text-embedding-3-small")
     )
     project_part.run()
 
@@ -34,7 +36,8 @@ def test_print_points():
     project_part = ProjectPart(
         Path(
             r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-        )
+        ),
+        embedder=init_openai_embedder("text-embedding-3-small")
     )
     project_part.run()
     points, chunks = project_part.points, project_part.chunks
@@ -49,7 +52,8 @@ def test_run_query():
     project_part = ProjectPart(
         Path(
             r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-        )
+        ),
+        embedder=init_openai_embedder("text-embedding-3-small")
     )
     project_part.run()
 
