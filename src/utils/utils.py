@@ -630,15 +630,15 @@ if __name__ == "__main__":
 
     # найти номера страниц файла, где заголовком будет text1, text2
     
-    text1 = "2. ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ"
-    text2 = "3. ВОЗДЕЙСТВИЕ ОБЪЕКТА ПРОЕКТИРОВАНИЯ НА АТМОСФЕРНЫЙ ВОЗДУХ"
+    text1 = "3. ВОЗДЕЙСТВИЕ ОБЪЕКТА ПРОЕКТИРОВАНИЯ НА АТМОСФЕРНЫЙ ВОЗДУХ"
+    text2 = "4. ВОЗДЕЙСТВИЕ ОБЪЕКТА ПРОЕКТИРОВАНИЯ НА СОСТОЯНИЕ ПОВЕРХНОСТНЫХ И ПОДЗЕМНЫХ ВОД"
     
     results = []
     for f in glob.glob(r"C:\Users\maxfi\Desktop\ПМООС\ПМООСы\*.pdf"):
         # print(f)
         print(page1 := find_pages_index_by_text(f, text=text1, max_len=2))
         print(page2 := find_pages_index_by_text(f, text=text2, max_len=2))
-        # print("-------------")
+        print("-------------\n")
         results.append((f, page1[1], page2[1]))
         
     print(results)
