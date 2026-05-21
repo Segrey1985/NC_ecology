@@ -26,9 +26,9 @@ def init_embedder(model_name: str):
         raise ValueError(f"{model_name} отсутствует в embeddings_list.")
     
     if embedding_model['is_local'] is True:
-        embedder = load_local_embedder(cfg.EMBEDDINGS_MODEL_NAME)
+        embedder = load_local_embedder(model_name)
     else:
-        embedder = init_openai_embedder(cfg.EMBEDDINGS_MODEL_NAME)
+        embedder = init_openai_embedder(model_name)
     return embedder
 
 # _______________ QdrantService _______________
