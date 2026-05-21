@@ -89,13 +89,15 @@ def rerank_with_api(
     return reranked
 
 
-def rerank_chunks(query: str, chunks: list[str], *, top_n: int = 5) -> list[tuple[str, float]]:
-    model = cfg.RERANKER_MODEL
-    is_local = rerankers_list[model]["is_local"]
+def rerank_chunks(
+    query: str, chunks: list[str], reranker_model: str, *, top_n: int = 5
+) -> list[tuple[str, float]]:
+    
+    is_local = rerankers_list[reranker_model]["is_local"]
     if is_local:
-        return rerank_with_local_reranker(model_name=model, query=query, chunks=chunks, top_n=top_n)
+        return rerank_with_local_reranker(model_name=reranker_model, query=query, chunks=chunks, top_n=top_n)
     else:
-        return rerank_with_api(model_name=model, query=query, chunks=chunks, top_n=top_n)
+        return rerank_with_api(model_name=reranker_model, query=query, chunks=chunks, top_n=top_n)
 
 
 if __name__ == "__main__":
@@ -109,12 +111,6 @@ if __name__ == "__main__":
     
     query = "Наименование объекта строительства"
 
-    reranked = rerank_chunks(query, chunks)
-    for r in reranked:
-        print(r)
-        
-    cfg.RERANKER_MODEL = "qilowoq/bge-reranker-v2-m3-en-ru"
-    
-    reranked = rerank_chunks(query, chunks)
+    reranked = rerank_chunks(query, chunks, reranker_model="qilowoq/bge-reranker-v2-m3-en-ru")
     for r in reranked:
         print(r)

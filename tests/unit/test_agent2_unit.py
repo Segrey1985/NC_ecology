@@ -4,6 +4,7 @@ import json
 
 import pytest
 from pydantic import BaseModel
+from config.config_file import build_runtime_config
 
 
 def test_search_in_related_disciplines_requires_init():
@@ -170,11 +171,12 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
 
     agent2.PARAMS_2.qdrant_service = FakeQdrant()
     agent2.PARAMS_2.collection_name = "main"
+    agent2.PARAMS_2.runtime_cfg = build_runtime_config('on')
 
     monkeypatch.setattr(
         agent2,
         "rerank_with_expanded_queries",
-        lambda _qs, texts, **kwargs: [(texts[0], 1.0)],
+        lambda _qs, texts, model, **kwargs: [(texts[0], 1.0)],
     )
     monkeypatch.setattr(agent2, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
@@ -358,10 +360,10 @@ def test_init_graph_2_raises_when_collection_unknown_and_no_project_parts_path(m
         def __init__(self):
             self.client = FakeClient()
 
-    monkeypatch.setattr(agent2, "build_qdrant_service", lambda: FakeQdrant())
+    monkeypatch.setattr(agent2, "build_qdrant_service", lambda x: FakeQdrant())
 
     with pytest.raises(ValueError, match="project_parts_path не передан"):
-        agent2.init_graph_2(collection_name="does-not-exist", project_parts_path=None)
+        agent2.init_graph_2(collection_name="does-not-exist", project_parts_path=None, runtime_cfg=build_runtime_config('on'))
 
 
 def test_init_graph_2_existing_collection_does_not_create(monkeypatch: pytest.MonkeyPatch):
@@ -400,14 +402,14 @@ def test_init_graph_2_existing_collection_does_not_create(monkeypatch: pytest.Mo
         def compile(self):
             return "compiled"
 
-    monkeypatch.setattr(agent2, "build_qdrant_service", lambda: FakeQdrant())
+    monkeypatch.setattr(agent2, "build_qdrant_service", lambda x: FakeQdrant())
     monkeypatch.setattr(agent2, "create_project_parts", lambda _p: called.__setitem__("parts", called["parts"] + 1))
     monkeypatch.setattr(agent2, "create_collection", lambda *_a, **_k: called.__setitem__("create", called["create"] + 1))
     monkeypatch.setattr(agent2, "fill_collection", lambda *_a, **_k: called.__setitem__("fill", called["fill"] + 1))
     monkeypatch.setattr(agent2, "LlmModel", FakeLlmModel)
     monkeypatch.setattr(agent2, "StateGraph", FakeStateGraph)
 
-    compiled = agent2.init_graph_2(collection_name="main", project_parts_path=None)
+    compiled = agent2.init_graph_2(collection_name="main", project_parts_path=None, runtime_cfg=build_runtime_config('off'))
     assert compiled == "compiled"
     assert called == {"create": 0, "fill": 0, "parts": 0}
     assert agent2.PARAMS_2.collection_name == "main"

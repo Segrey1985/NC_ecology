@@ -5,7 +5,7 @@ from typing import Literal
 
 from src.agents.agent import init_graph, PARAMS
 from config.langfuse_client import langfuse_config
-from config.config_file import dynamic_config
+from config.config_file import build_runtime_config
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.docx_template_engine import fill_docx_template
@@ -61,7 +61,6 @@ def _run_graph(
     return final_content
 
 
-@dynamic_config
 def main(
     template_docx_path: Path | None,
     placeholders_path: Path,
@@ -73,8 +72,10 @@ def main(
     test_mode: Literal["on", "off", "mock"] = "on",
 ):
     try:
+        runtime_cfg = build_runtime_config(test_mode)
+        
         graph = init_graph(
-            collection_name=collection_name, project_parts_path=project_parts_path
+            collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
         )
     
         placeholders, table_placeholders = _load_placeholders(

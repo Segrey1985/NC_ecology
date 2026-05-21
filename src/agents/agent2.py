@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
-from config.config_file import cfg
+from config.config_file import cfg, Config
 from src.models import LlmModel
 from src.retrieval.qdrant import (
     QdrantService,
@@ -35,6 +35,7 @@ class GraphParams:
         self.collection_name: Optional[str] = None
         self.qdrant_service: Optional[QdrantService] = None
         self.llm = None
+        self.runtime_cfg: Config | None = None
 
 
 PARAMS_2 = GraphParams()  # глобальный объект параметров (для agent_2)
@@ -91,7 +92,7 @@ def _rag_search_and_rerank(
     if not texts:
         return []
     
-    reranked = rerank_with_expanded_queries(reranker_prompts, texts, top_n=5)
+    reranked = rerank_with_expanded_queries(reranker_prompts, texts, PARAMS_2.runtime_cfg.RERANKER_MODEL, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 
@@ -422,12 +423,16 @@ def route_after_check(state: Agent2State) -> str:
     return END
 
 
-def init_graph_2(collection_name: str, project_parts_path: Path | None):
+def init_graph_2(collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None):
     """
     Инициализирует параметры и собирает граф для работы с минисхемами JSON Schema.
     """
+    
+    runtime_cfg = runtime_cfg or cfg
+    
     PARAMS_2.collection_name = collection_name
-    PARAMS_2.qdrant_service = build_qdrant_service()
+    PARAMS_2.qdrant_service = build_qdrant_service(runtime_cfg)
+    PARAMS_2.runtime_cfg = runtime_cfg
 
     if not PARAMS_2.qdrant_service.client.collection_exists(collection_name):
         if not project_parts_path:
@@ -445,7 +450,7 @@ def init_graph_2(collection_name: str, project_parts_path: Path | None):
     else:
         logger.info(f"[agent_2] Найдена существующая коллекция <{collection_name}>")
 
-    PARAMS_2.llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
+    PARAMS_2.llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
 
     builder = StateGraph(Agent2State)
     builder.add_node("generate_retrieval_prompts_node", generate_retrieval_prompts_node)

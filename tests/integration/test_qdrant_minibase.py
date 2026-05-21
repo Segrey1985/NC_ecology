@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 
 from src.retrieval.qdrant import ProjectPart, build_qdrant_service
+from config.config_file import build_runtime_config
 
 
 def test_qdrant_minibase_from_trim_first3_and_cleanup():
@@ -11,7 +12,7 @@ def test_qdrant_minibase_from_trim_first3_and_cleanup():
     pdfs = sorted(trim_dir.glob("*.pdf"))[:3]
     assert len(pdfs) == 3, f"Ожидалось 3 pdf в {trim_dir}, найдено: {len(pdfs)}"
 
-    qdrant_service = build_qdrant_service()
+    qdrant_service = build_qdrant_service(build_runtime_config('off'))
     collection_name = f"trim_first3_{uuid.uuid4().hex}"
 
     try:

@@ -5,9 +5,6 @@ from pathlib import Path
 from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from functools import wraps
-from collections.abc import Callable
-
 from src.utils.logger import logger
 
 warnings.filterwarnings(
@@ -91,25 +88,22 @@ class Config(BaseSettings):
 
 
 cfg = Config()
-print(cfg)
+
+TestMode = Literal["off", "on", "mock", "filter"]
 
 
-def dynamic_config(func: Callable) -> Callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if kwargs.get("test_mode") != "off":
-            
-            # модели применяемые для тестирования агента
-            cfg.RERANKER_MODEL = "rerank-v3.5"
-            cfg.EMBEDDINGS_MODEL_NAME = "text-embedding-3-small"
-
-        result = func(*args, **kwargs)
-        return result
-    return wrapper
+def build_runtime_config(test_mode: TestMode) -> Config:
+    runtime_config = cfg.model_copy(deep=True)
+    
+    if test_mode != "off":
+        runtime_config.RERANKER_MODEL = "rerank-v3.5"
+        runtime_config.EMBEDDINGS_MODEL_NAME = "text-embedding-3-small"
+    
+    return runtime_config
 
 
 logger.info("\n\n\n\n\n---START----\n\n\n\n\n")
-logger.info(f"{cfg.DEVICE=}")
+logger.info(cfg)
 
 if __name__ == "__main__":
     print(cfg)

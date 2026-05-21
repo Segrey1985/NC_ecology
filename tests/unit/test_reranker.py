@@ -2,6 +2,7 @@ from pathlib import Path
 
 from src.retrieval.qdrant import ProjectPart
 from src.retrieval.embeddings import init_openai_embedder
+from config.config_file import cfg
 
 project_part = ProjectPart(
     file_path = Path(
@@ -17,7 +18,7 @@ query = "Наименование объекта строительства"
 def test_rerank_chunks():
     from src.retrieval.reranker import rerank_chunks
 
-    reranked = rerank_chunks(query, chunks, top_n=3)
+    reranked = rerank_chunks(query, chunks, cfg.RERANKER_MODEL, top_n=3)
     assert len(reranked) == 3
 
 

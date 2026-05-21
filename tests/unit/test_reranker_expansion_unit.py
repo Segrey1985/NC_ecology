@@ -21,7 +21,7 @@ def test_rerank_with_expanded_queries(monkeypatch: pytest.MonkeyPatch):
 
     calls: list[str] = []
 
-    def fake_rerank(query: str, chunks: list[str], *, top_n: int = 5):
+    def fake_rerank(query: str, chunks: list[str], reranker_model: str, *, top_n: int = 5):
         calls.append(query)
         return [(chunks[0], 1.0), (chunks[1], 0.5)]
 
@@ -30,6 +30,7 @@ def test_rerank_with_expanded_queries(monkeypatch: pytest.MonkeyPatch):
     result = mod.rerank_with_expanded_queries(
         ["q1", "q2"],
         ["t1", "t2"],
+        'model',
         top_n=2,
         merge_strategy="max_score",
         max_workers=2,

@@ -1,7 +1,7 @@
 from pathlib import Path
 from src.retrieval.qdrant import ProjectPart, build_qdrant_service
 from src.retrieval.embeddings import init_openai_embedder
-
+from config.config_file import build_runtime_config
 
 def test_qdrant_service():
     project_part = ProjectPart(
@@ -12,7 +12,7 @@ def test_qdrant_service():
     )
     project_part.run()
 
-    qdrant_service = build_qdrant_service()
+    qdrant_service = build_qdrant_service(runtime_cfg=build_runtime_config('on'))
     COLLECTION_NAME = "test_data"
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
 
@@ -24,7 +24,7 @@ def test_qdrant_service():
 
 def test_recreate_collection():
     """build_qdrant_service and recreate collection"""
-    qdrant_service = build_qdrant_service()
+    qdrant_service = build_qdrant_service(runtime_cfg=build_runtime_config('on'))
     COLLECTION_NAME = "test_data"
     if qdrant_service.client.collection_exists(COLLECTION_NAME):
         qdrant_service.client.delete_collection(COLLECTION_NAME)
@@ -57,7 +57,7 @@ def test_run_query():
     )
     project_part.run()
 
-    qdrant_service = build_qdrant_service()
+    qdrant_service = build_qdrant_service(runtime_cfg=build_runtime_config('on'))
     COLLECTION_NAME = "test_data"
     if qdrant_service.client.collection_exists(COLLECTION_NAME):
         qdrant_service.client.delete_collection(COLLECTION_NAME)

@@ -12,7 +12,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config.config_file import cfg, embeddings_list
+from config.config_file import cfg, embeddings_list, Config
 from src.utils.logger import logger
 from src.utils.utils import extract_text_with_miner_coords
 from src.retrieval.embeddings import load_local_embedder, init_openai_embedder
@@ -116,10 +116,10 @@ class QdrantService:
             return []
 
 
-def build_qdrant_service() -> QdrantService:
+def build_qdrant_service(runtime_cfg: Config) -> QdrantService:
     """Создает и возвращает QdrantService, умеющий создавать коллекции и добавлять туда точки"""
-    client = QdrantClient(url=cfg.QDRANT_URL)
-    embedder = init_embedder(cfg.EMBEDDINGS_MODEL_NAME)
+    client = QdrantClient(url=runtime_cfg.QDRANT_URL)
+    embedder = init_embedder(runtime_cfg.EMBEDDINGS_MODEL_NAME)
     return QdrantService(client=client, model=embedder)
 
 

@@ -10,7 +10,7 @@ from langchain_core.messages import (
 from pydantic import BaseModel, Field
 
 from src.utils.logger import logger
-from config.config_file import cfg
+from config.config_file import cfg, Config
 from config.langfuse_client import langfuse_config
 from src.models import LlmModel
 from src.utils.utils import print_chunk, format_rag_context
@@ -32,6 +32,7 @@ class GraphParams:
         self.collection_name: Optional[str] = None
         self.qdrant_service: Optional[QdrantService] = None
         self.llm = None
+        self.runtime_cfg: Config | None = None
 
 
 PARAMS = GraphParams()  # глобальный объект параметров
@@ -71,7 +72,7 @@ def search_in_related_disciplines(query: str) -> list[str]:
         query, collection_name=collection_name, limit=50
     )
     texts = [point.payload["text"] for point in relevant_points]
-    reranked = rerank_chunks(query, texts, top_n=5)
+    reranked = rerank_chunks(query, texts, reranker_model=PARAMS.runtime_cfg.RERANKER_MODEL, top_n=5)
     return [chunk for chunk, _score in reranked]
 
 
@@ -195,14 +196,17 @@ def route_after_check(state: AgentState) -> str:
 # --- Инициализация графа ---
 
 
-def init_graph(collection_name: str, project_parts_path: Path | None):
+def init_graph(collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None):
     """
     Инициализирует параметры и собирает граф.
     """
+    
+    runtime_cfg = runtime_cfg or cfg
 
     # Обновляем глобальные параметры
     PARAMS.collection_name = collection_name
-    PARAMS.qdrant_service = build_qdrant_service()
+    PARAMS.qdrant_service = build_qdrant_service(runtime_cfg)
+    PARAMS.runtime_cfg = runtime_cfg
 
     # Создаем и заполняем новую коллекцию, при необходимости
     if not PARAMS.qdrant_service.client.collection_exists(collection_name):
@@ -221,7 +225,7 @@ def init_graph(collection_name: str, project_parts_path: Path | None):
     else:
         logger.info(f"Найдена существующая коллекция <{collection_name}>")
 
-    PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=cfg.MODEL_NAME).create()
+    PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
 
     builder = StateGraph(AgentState)
     builder.add_node("rag_search_node", rag_search_node)

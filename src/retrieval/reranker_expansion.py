@@ -32,6 +32,7 @@ class RerankedChunk:
 def multiple_rerank(
     queries: list[str],
     chunks: list[str],
+    reranker_model: str,
     *,
     max_workers: int | None = 4,
     score_all: bool = True,
@@ -50,7 +51,7 @@ def multiple_rerank(
     workers = max_workers or min(8, max(len(queries), 1))
 
     def _rerank(query: str) -> list[tuple[str, float]]:
-        return rerank_chunks(query, chunks, top_n=top_n)
+        return rerank_chunks(query, chunks, reranker_model=reranker_model, top_n=top_n)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_idx = {
@@ -117,6 +118,7 @@ def merge_rerank_results(
 def rerank_with_expanded_queries(
     queries: list[str],
     chunks: list[str],
+    reranker_model: str,
     *,
     top_n: int = 5,
     merge_strategy: MergeStrategy = DEFAULT_MERGE_STRATEGY,
@@ -133,6 +135,7 @@ def rerank_with_expanded_queries(
     per_query = multiple_rerank(
         clean_queries,
         chunks,
+        reranker_model,
         max_workers=max_workers,
         score_all=True,
     )
