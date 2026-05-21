@@ -280,73 +280,6 @@ class Measures(BaseModel):
     )
 
 
-# ─────────────────────────────────────────────
-# Главная модель данных для Главы 2
-# ─────────────────────────────────────────────
-
-
-class Chapter2Data(BaseModel):
-    """
-    Полная модель данных для генерации Главы 2
-    'Воздействие объекта на земельные ресурсы' раздела ООС.
-
-    Использование:
-        from docxtpl import DocxTemplate
-        doc = DocxTemplate("chapter2_template.docx")
-        doc.render(chapter2_data.model_dump())
-        doc.save("output.docx")
-    """
-
-    # Ссылки на модели из Главы 1 (переиспользуются)
-    facility: "Facility" = Field(
-        ...,
-        description="Основные сведения об объекте (из модели Главы 1)",
-    )
-    land_plot: "LandPlot" = Field(
-        ...,
-        description="Сведения о земельном участке (из модели Главы 1)",
-    )
-
-    # Модели специфичные для Главы 2
-    geology: Geology = Field(
-        ...,
-        description="2.1.1. Инженерно-геологические условия",
-    )
-    hydrogeology: Hydrogeology = Field(
-        ...,
-        description="2.1.2. Гидрогеологические условия",
-    )
-    dangerous_processes: DangerousProcesses = Field(
-        ...,
-        description="2.1.3. Характеристика опасных экзогенных процессов",
-    )
-    soil: Soil = Field(
-        ...,
-        description="2.1.4. Почвенные условия территории",
-    )
-    land_use: LandUse = Field(
-        ...,
-        description="2.1.5. Характер землепользования района проектирования",
-    )
-    technogenic: Technogenic = Field(
-        ...,
-        description="2.1.6. Техногенное нарушение территории",
-    )
-    physical_factors: PhysicalFactors = Field(
-        ...,
-        description="2.1.7. Физические факторы воздействия",
-    )
-    subsoil: Subsoil = Field(
-        ...,
-        description="2.3. Охрана недр",
-    )
-    measures: Measures = Field(
-        default_factory=Measures,
-        description="2.5. Мероприятия по охране земельных ресурсов",
-    )
-
-
-# Forward references для переиспользования моделей из Главы 1
 class Facility(BaseModel):
     """Ссылка на модель Facility из models.py Главы 1 (минимальные поля для Главы 2)"""
 
@@ -387,7 +320,3 @@ class LandPlot(BaseModel):
         ...,
         description="Площадь земельного участка в кв.м",
     )
-
-
-# Обновление forward references
-Chapter2Data.model_rebuild()
