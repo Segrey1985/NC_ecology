@@ -37,14 +37,15 @@ class GraphResources:
 
 class AgentState(TypedDict):
     # input
-    input_query: str
+    for_rag_search: str
+    examples: list[str]
+    question: str
 
     # rag
     rag_query: str
     rag_context: str
 
     # agent_node
-    input_for_agent_prompt: str
     answer: str
 
     # check_node
@@ -56,6 +57,31 @@ class AgentState(TypedDict):
 
 
 # --- Tools ---
+
+
+def _build_agent_prompt(
+    examples: list[str],
+    question: str,
+    rag_context: str,
+) -> str:
+    
+    prompt = ""
+    
+    if examples:
+        prompt += "Примеры:\n\n"
+        prompt += "\n\n\n".join(examples)
+        prompt += f"Теперь извлеки данные.\n\n"
+    
+    prompt += (
+        f"Вопрос:\n"
+        f"{question}\n\n"
+        f"Контекст:\n"
+        f"{rag_context}\n\n"
+        f"Ответ:"
+        
+    )
+    
+    return prompt
 
 
 def search_in_related_disciplines(query: str, resources: GraphResources) -> list[str]:
@@ -79,7 +105,7 @@ def search_in_related_disciplines(query: str, resources: GraphResources) -> list
 
 
 def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
-    rag_query = state.get("rag_query") or state["input_query"]
+    rag_query = state.get("rag_query") or state["for_rag_search"]
     chunks = search_in_related_disciplines(rag_query, resources)
     rag_context = format_rag_context(chunks)
     logger.info(f"RAG search completed for query: {rag_query}")
@@ -91,6 +117,11 @@ def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
 
 def answer_node(state: AgentState, resources: GraphResources) -> AgentState:
     llm = resources.llm
+    prompt = _build_agent_prompt(
+        examples=state["examples"],
+        question=state["question"],
+        rag_context=state["rag_context"],
+    )
     system_message = SystemMessage(
         "Ты помощник по поиску данных по строительному проекту. "
         "Отвечай только на основе переданного RAG-контекста. "
@@ -104,10 +135,7 @@ def answer_node(state: AgentState, resources: GraphResources) -> AgentState:
     messages = [
         system_message,
         HumanMessage(
-            content=(
-                f"Запрос пользователя:\n{state['input_for_agent_prompt']}\n\n"
-                f"RAG-контекст:\n{state['rag_context']}"
-            )
+            content=prompt
         ),
     ]
     response = llm.with_structured_output(StructuredResponse, strict=True).invoke(messages)
@@ -142,8 +170,7 @@ def check_node(state: AgentState, resources: GraphResources) -> AgentState:
         system_message,
         HumanMessage(
             content=(
-                f"Запрос пользователя:\n{state['input_for_agent_prompt']}\n\n"
-                f"RAG-контекст:\n{state['rag_context']}\n\n"
+                f"Запрос пользователя:\n{state["question"]}\n\n"
                 f"Ответ:\n{state['answer']}"
             )
         ),
@@ -166,7 +193,7 @@ def rewrite_query_node(state: AgentState, resources: GraphResources) -> AgentSta
         system_message,
         HumanMessage(
             content=(
-                f"Исходный запрос пользователя:\n{state['input_query']}\n\n"
+                f"Исходный запрос пользователя:\n{state['for_rag_search']}\n\n"
                 f"Предыдущий RAG-запрос:\n{state['rag_query']}\n\n"
                 f"Причина повторного поиска:\n{state['check_reason']}\n\n"
                 f"Предыдущий ответ:\n{state['answer']}"
@@ -174,7 +201,7 @@ def rewrite_query_node(state: AgentState, resources: GraphResources) -> AgentSta
         ),
     ]
     response = llm.invoke(messages)
-    rewritten_query = str(response.content).strip() or state["input_query"]
+    rewritten_query = str(response.content).strip() or state["for_rag_search"]
     logger.info(f"RAG query rewritten: {rewritten_query}")
 
     return {
@@ -264,15 +291,11 @@ if __name__ == "__main__":
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     config.update(langfuse_config)
 
-    input_query = "Проектируемые электросети"
-    input_for_agent_prompt = (
-        "Краткое описание проектируемых электросетей и их параметров"
-    )
-
     for chunk in graph.stream(
         input={
-            "input_query": input_query,
-            "input_for_agent_prompt": input_for_agent_prompt,
+            "for_rag_search": "Проектируемые электросети",
+            "examples": [],
+            "question": "Краткое описание проектируемых электросетей и их параметров",
         },
         stream_mode="updates",
         config=config,

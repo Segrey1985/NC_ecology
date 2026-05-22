@@ -33,7 +33,7 @@ def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | 
 
 
 def _run_graph(
-    graph, input_for_rag_search, input_for_agent_prompt, verbose: bool = True
+    graph, for_rag_search: str, examples: list[str], question: str, verbose: bool = True
 ) -> str:
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -42,8 +42,9 @@ def _run_graph(
     final_content = ""
     for chunk in graph.stream(
         input={
-            "input_query": input_for_rag_search,
-            "input_for_agent_prompt": input_for_agent_prompt,
+            "for_rag_search": for_rag_search,
+            "examples": examples,
+            "question": question,
         },
         stream_mode="updates",
         config=config,
@@ -83,8 +84,9 @@ def thread_run_graph_for_placeholder(
     try:
         final_content = _run_graph(
             graph=graph,
-            input_for_rag_search=placeholder_info["for_rag_search"],
-            input_for_agent_prompt=placeholder_info["for_agent_prompt"],
+            for_rag_search=placeholder_info["for_rag_search"],
+            examples=placeholder_info["examples"],
+            question=placeholder_info["question"],
             verbose=verbose,
         )
         return {
