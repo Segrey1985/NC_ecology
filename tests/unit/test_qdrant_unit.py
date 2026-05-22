@@ -3,6 +3,7 @@ from src.retrieval.qdrant import ProjectPart, build_qdrant_service
 from src.retrieval.embeddings import init_openai_embedder
 from config.config_file import build_runtime_config
 
+
 def test_qdrant_service():
     project_part = ProjectPart(
         Path(

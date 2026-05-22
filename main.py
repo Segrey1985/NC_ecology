@@ -1,52 +1,53 @@
 import json
 import uuid
+import threading
 from pathlib import Path
 from typing import Literal
 
+from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from src.agents.agent import GraphResources, init_graph
-from config.langfuse_client import langfuse_config
 from config.config_file import build_runtime_config
+from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
-from src.utils.utils import print_chunk, is_valid_uuid4_hex
+from src.utils.utils import (
+    print_chunk,
+    is_valid_uuid4_hex,
+    iter_models_from_module,
+    iter_chapter_models,
+    pick_assembly_model,
+    filter_mode_payload_and_validate,
+    filter_mode_assembly_to_docx_context,
+    build_input_query,
+    update_with_table_placeholders
+)
 from src.templates.docx_template_engine import fill_docx_template
-
-__placeholders_example = {
-    "НАИМЕНОВАНИЕ_ПРОЕКТА": "Наименование проекта",
-    "ТИП_РАБОТ": " тип строительных работ для склонения в тексте (например, 'строительства', 'реконструкции', 'технического перевооружения').",
-}
-
-
-def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | None):
-
-    if table_placeholders_path:
-        with open(
-            table_placeholders_path, "r", encoding="utf-8"
-        ) as table_placeholders_file:
-            table_placeholders = json.load(table_placeholders_file)
-    else:
-        table_placeholders = {}
-
-    with open(placeholders_path, "r", encoding="utf-8") as placeholders_file:
-        placeholders = json.load(placeholders_file)
-
-    placeholders = {
-        k: v for k, v in placeholders.items() if k not in table_placeholders
-    }
-    return placeholders, table_placeholders
 
 
 def _run_graph(
-    graph, input_for_rag_search, input_for_agent_prompt, verbose: bool = True
+    graph,
+    input_query: str,
+    output_model: type[BaseModel],
+    verbose: bool = True,
 ) -> str:
 
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config = {
+        "configurable": {
+            "thread_id": str(uuid.uuid4()),
+            "output_model": output_model,
+        },
+        "metadata": {
+            "output_model": output_model.__name__,
+        },
+    }
     config.update(langfuse_config)
 
     final_content = ""
     for chunk in graph.stream(
         input={
-            "input_query": input_for_rag_search,
-            "input_for_agent_prompt": input_for_agent_prompt,
+            "input_query": input_query,
         },
         stream_mode="updates",
         config=config,
@@ -61,65 +62,160 @@ def _run_graph(
     return final_content
 
 
+def _log_thread():
+    log_lines = []
+    thread_ident = threading.get_ident()
+
+    def _only_this_thread(record) -> bool:
+        return record["thread"].id == thread_ident
+
+    def _capture_sink(message) -> None:
+        log_lines.append(message.strip())
+
+    handler_id = logger.add(_capture_sink, filter=_only_this_thread, colorize=True)
+    return handler_id, log_lines
+
+
+def thread_run_graph_for_model(
+    graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
+) -> dict:
+    handler_id, log_lines = _log_thread()
+
+    try:
+        final_content = _run_graph(
+            graph,
+            input_query=build_input_query(model),
+            output_model=model,
+            verbose=verbose,
+        )
+        return {
+            "model": model,
+            "model_name": model.__name__,
+            "result": json.loads(final_content) if final_content else {},
+            "logs_lines": log_lines,
+        }
+    finally:
+        logger.remove(handler_id)
+
+
 def main(
     template_docx_path: Path | None,
-    placeholders_path: Path,
-    table_placeholders_path: Path | None,
     project_parts_path: Path | None,
+    table_placeholders_path: Path | None,
     output_path: Path,
+    chapter_module_path: str,
     collection_name: str = "main",
     verbose: bool = True,
-    test_mode: Literal["on", "off", "mock"] = "on",
+    test_mode: Literal["on", "off", "mock", "filter"] = "on",
+    max_workers: int | None = None,
 ):
     resources: GraphResources | None = None
     try:
+        
         runtime_cfg = build_runtime_config(test_mode)
         
+        # init graph
+
         graph, resources = init_graph(
             collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
         )
-    
-        placeholders, table_placeholders = _load_placeholders(
-            placeholders_path, table_placeholders_path
-        )
-    
+
+        total_results: list[dict] = []
+
         if test_mode == "mock":
-            placeholders_output = json.load(
+            results = json.load(
                 open(
-                    "data/mock/placeholders_output.json",
+                    "data/mock/chapter1_models_output.json",
                     encoding="utf-8",
                 )
             )
         else:
-            placeholders_output = {}
-    
-            for key, value in table_placeholders.items():
-                placeholders_output[key] = value
-    
-            for placeholder, placeholder_info in placeholders.items():
-                input_for_rag_search = placeholder_info["for_rag_search"]
-                input_for_agent_prompt = placeholder_info["for_agent_prompt"]
-                final_content = _run_graph(
-                    graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
-                )
-                placeholders_output[placeholder] = json.loads(final_content).get(
-                    "answer", "__empty__"
-                )
+
+            # get models from module
+
+            models_module_path = chapter_module_path + ".models"
+            if test_mode == "filter":
+                models = iter_chapter_models(chapter_module_path)
+                if not models:
+                    raise RuntimeError(
+                        f"Не нашёл pydantic-моделей в модуле `{models_module_path}` "
+                        f"(см. `{chapter_module_path}.debug_models`)."
+                    )
+            else:
+                models = iter_models_from_module(models_module_path)
+                if not models:
+                    raise RuntimeError(
+                        f"Не нашёл pydantic-моделей в модуле `{models_module_path}`."
+                    )
                 if test_mode == "on":
-                    break
-    
+                    models = models[:1]
+
+            # run thread_run_graph_for_model in ThreadPoolExecutor
+
+            if max_workers is None:
+                max_workers = min(4, max(1, len(models)))
+
+            results: dict[str, object] = {model.__name__: None for model in models}
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(
+                        thread_run_graph_for_model,
+                        graph=graph,
+                        model=model,
+                        verbose=verbose,
+                    )
+                    for model in models
+                ]
+
+                for future in as_completed(futures):
+                    dct = future.result()
+                    results[dct["model_name"]] = dct["result"]
+                    total_results.append(dct)
+
+        # print results
+
+        for t in total_results:
+            model_name = t["model_name"]
+            log_lines = t["logs_lines"]
+            print(f"\n--- Логи потока {model_name} ({len(log_lines)} записей) ---")
+            for line in log_lines:
+                print(line)
+            print("--- конец логов потока ---\n")
+
+        # export results
+
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-    
-            placeholders_out_path = output_path / "placeholders.json"
-            with open(placeholders_out_path, "w", encoding="utf-8") as f:
-                json.dump(placeholders_output, f, ensure_ascii=False, indent=4)
-    
+
+            results_out_path = output_path / "chapter1_models_output.json"
+            with open(results_out_path, "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+
             if template_docx_path:
-                result_template_out_path = output_path / "result_template.docx"
+                assembly_module_path = chapter_module_path + ".assembly"
+                assembly_model = pick_assembly_model(assembly_module_path)
+            
+                if test_mode == "filter":
+                    data = filter_mode_payload_and_validate(assembly_model, results)
+                    data_dict = filter_mode_assembly_to_docx_context(
+                        assembly_model,
+                        data,
+                        preserve_unfilled=True,
+                    )
+                else:
+                    data = assembly_model.model_validate(results)
+                    data_dict = data.model_dump(mode="json")
+                
+                if table_placeholders_path:
+                    update_with_table_placeholders(data_dict, table_placeholders_path=table_placeholders_path)
+                
+                result_template_out_path = (
+                    output_path / f"{chapter_module_path.split('.')[-1]}.docx"
+                )
                 fill_docx_template(
                     template_path=template_docx_path,
-                    data=placeholders_output,
+                    data=data_dict,
                     output_docx_path=result_template_out_path,
                 )
     finally:
@@ -133,18 +229,19 @@ def main(
             logger.info(
                 f"collection <{collection_name}> name is valid uuid and was deleted"
             )
+    logger.info("\n\n ЗАВЕРШЕНО \n\n")
 
 
 if __name__ == "__main__":
 
     base = Path(__file__).parent
-    input_dir = base / "data" / "IN" / "project1" / "schemas" / "0_Аннотация_и_Введение"
     main(
-        template_docx_path=input_dir / "template.docx",
-        placeholders_path=input_dir / "placeholders.json",
-        table_placeholders_path=input_dir / "table_placeholders.json",
-        project_parts_path=None,
+        template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
+        project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\chapter2"),
+        table_placeholders_path=None,
         output_path=base / "data" / "OUT" / "project1",
-        collection_name="main",
-        test_mode="on",
+        chapter_module_path="src.ecology_chapters.chapter2",
+        collection_name="chapter2",
+        test_mode="off",
+        max_workers=8,
     )

@@ -10,8 +10,8 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
+from main_base import main as run_main_base
 from main import main as run_main
-from main2 import main as run_main2
 from src.utils.validators import validate_docx, validate_json, validate_zip
 from src.utils.logger import logger
 
@@ -53,12 +53,12 @@ def health():
 
 
 @app.post(
-    "/generate",
+    "/chapter0",
     summary = "Аннотация и введение",
     description = "Эндпоинт используется для генерации глав 'Аннотация' и 'Введение'",
     tags = ["Generation"],
 )
-async def generate(
+async def chapter0(
     placeholders: UploadFile = File(..., description="JSON с плейсхолдерами"),
     template_docx: UploadFile = File(..., description="DOCX шаблон"),
     table_placeholders: UploadFile | None = File(
@@ -133,7 +133,7 @@ async def generate(
         logger.info(f"{output_dir=}")
         logger.info(f"{collection_name=}")
         
-        run_main(
+        run_main_base(
             template_docx_path=template_docx_path,
             placeholders_path=placeholders_path,
             table_placeholders_path=table_placeholders_path,
@@ -215,7 +215,7 @@ async def chapter1(
         logger.info(f"generate2 {collection_name=}")
         logger.info(f"generate2 {max_workers=}")
 
-        run_main2(
+        run_main(
             template_docx_path=template_docx_path,
             project_parts_path=project_parts_dir,
             output_path=output_dir,

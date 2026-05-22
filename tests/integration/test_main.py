@@ -1,54 +1,54 @@
-import uuid
+from __future__ import annotations
+
+import json
+import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
 from main import main
-from src.utils.logger import logger
+from config.config_file import cfg
 
+def test_main_test_mode_on_processes_only_first_model_and_cleanup():
+    """
+    Интеграционный тест уровня main2 БЕЗ моков/подмен:
+    - реальный init_graph_2 + Qdrant + LLM
+    - test_mode="on" должен обработать только 1 pydantic-модель
 
-def test_main():
-    base = Path(__file__).parents[2]
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        output_dir = Path(tmp_dir) / "project1"
-        input_dir = base / "data" / "IN" / "project1" / "schemas" / "0_Аннотация_и_Введение"
+    После теста обязательно удаляем созданные файлы (output JSON).
+    """
+    repo_root = cfg.BASE_DIR
+    trim_dir = repo_root / "data" / "IN" / "project1" / "trim"
+    pdfs = sorted(trim_dir.glob("*.pdf"))[:2]
+    assert len(pdfs) >= 1, f"Ожидался хотя бы 1 pdf в {trim_dir}"
+
+    collection_name = uuid.uuid4().hex  # временная коллекция
+
+    with tempfile.TemporaryDirectory(prefix="nc_ecology_main2_it_") as tmp:
+        tmp_dir = Path(tmp)
+        
+        parts_dir = tmp_dir / "parts"
+        parts_dir.mkdir(parents=True, exist_ok=True)
+        
+        for pdf in pdfs:
+            shutil.copy2(pdf, parts_dir / pdf.name)
+
+        out_dir = tmp_dir / "out"
+        out_json = out_dir / "chapter1_models_output.json"
+
         main(
-            template_docx_path=input_dir / "template.docx",
-            placeholders_path=input_dir / "placeholders.json",
-            table_placeholders_path=input_dir / "table_placeholders.json",
-            project_parts_path=base / "data" / "IN" / "project1" / "trim" / "mini",
-            output_path=output_dir,
-            collection_name="test_data",
+            template_docx_path=None,
+            project_parts_path=parts_dir,
+            table_placeholders_path=Path("src/ecology_chapters/chapter1/table_placeholders.json"),
+            output_path=out_dir,
+            chapter_module_path="src.ecology_chapters.chapter1",
+            collection_name=collection_name,
+            verbose=False,
             test_mode="on",
+            max_workers=2,
         )
 
-        created_files = [p for p in output_dir.rglob("*") if p.is_file()]
-        assert (
-            len(created_files) == 2
-        ), f"Ожидалось 2 файла, найдено {len(created_files)}: {created_files}"
-
-
-def test_main_create_new_uuid_collection_and_delete():
-    logs = []
-    handler_id = logger.add(lambda x: logs.append(x.record["message"]))
-    try:
-        base = Path(__file__).parents[2]
-        collection_name = uuid.uuid4().hex
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            output_dir = Path(tmp_dir) / "project1"
-            input_dir = base / "data" / "IN" / "project1" /"schemas" / "0_Аннотация_и_Введение"
-            main(
-                template_docx_path=input_dir / "template.docx",
-                placeholders_path=input_dir / "placeholders.json",
-                table_placeholders_path=input_dir / "table_placeholders.json",
-                project_parts_path=base / "data" / "OUT" / "project1",
-                output_path=output_dir,
-                collection_name=collection_name,
-                test_mode="mock",
-            )
-            print(logs)
-            assert (
-                f"collection <{collection_name}> name is valid uuid and was deleted"
-                in logs
-            )
-    finally:
-        logger.remove(handler_id)
+        assert out_json.exists()
+        data = json.loads(out_json.read_text(encoding="utf-8"))
+        assert isinstance(data, dict)
+        assert len(data) == 1  # test_mode="on" => только 1 модель

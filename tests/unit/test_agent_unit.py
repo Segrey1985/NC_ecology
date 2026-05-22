@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from config.config_file import build_runtime_config
 
 
-def _resources(agent2, *, llm=None, qdrant_service=None, collection_name="main", runtime_cfg=None):
-    return agent2.GraphResources(
+def _resources(agent, *, llm=None, qdrant_service=None, collection_name="main", runtime_cfg=None):
+    return agent.GraphResources(
         collection_name=collection_name,
         qdrant_service=qdrant_service,
         llm=llm,
@@ -21,11 +21,11 @@ def _config(output_model: type[BaseModel]):
 
 
 def test_search_in_related_disciplines_requires_init():
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     with pytest.raises(RuntimeError, match="Qdrant не инициализирован"):
-        agent2._rag_search_and_rerank(
-            _resources(agent2, qdrant_service=None, collection_name=None),
+        agent._rag_search_and_rerank(
+            _resources(agent, qdrant_service=None, collection_name=None),
             ["q"],
             ["q"],
             output_model=BaseModel,
@@ -33,7 +33,7 @@ def test_search_in_related_disciplines_requires_init():
 
 
 def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     captured: dict[str, object] = {}
 
@@ -42,10 +42,10 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
         captured["reranker_prompts"] = rr
         return ["c1", "c2"]
 
-    monkeypatch.setattr(agent2, "_rag_search_and_rerank", fake_search)
-    monkeypatch.setattr(agent2, "format_rag_context", lambda chunks: "CTX:" + "|".join(chunks))
+    monkeypatch.setattr(agent, "_rag_search_and_rerank", fake_search)
+    monkeypatch.setattr(agent, "format_rag_context", lambda chunks: "CTX:" + "|".join(chunks))
 
-    out = agent2.rag_search_node(
+    out = agent.rag_search_node(
         {
             "input_query": "hello",
             "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
@@ -59,7 +59,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
             "rewrite_count": 0,
         },
         _config(BaseModel),
-        _resources(agent2),
+        _resources(agent),
     )
     
     assert captured == {
@@ -70,21 +70,21 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
 
 
 def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: int | None = None
 
     class FakePrompts:
         rag_prompts = [
-            agent2.RagPrompt(rag_prompt="  dense1  "),
-            agent2.RagPrompt(rag_prompt="  dense2  "),
-            agent2.RagPrompt(rag_prompt="  dense3  "),
+            agent.RagPrompt(rag_prompt="  dense1  "),
+            agent.RagPrompt(rag_prompt="  dense2  "),
+            agent.RagPrompt(rag_prompt="  dense3  "),
         ]
         reranker_prompts = [
-            agent2.RerankPrompt(reranker_prompt="  rerank1  "),
-            agent2.RerankPrompt(reranker_prompt="  rerank2  "),
-            agent2.RerankPrompt(reranker_prompt="  rerank3  "),
+            agent.RerankPrompt(reranker_prompt="  rerank1  "),
+            agent.RerankPrompt(reranker_prompt="  rerank2  "),
+            agent.RerankPrompt(reranker_prompt="  rerank3  "),
         ]
 
     class FakeStructured:
@@ -95,7 +95,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         def with_structured_output(self, _model, strict: bool = True):
             return FakeStructured()
 
-    out = agent2.generate_retrieval_prompts_node(
+    out = agent.generate_retrieval_prompts_node(
         {
             "input_query": "user q\nextract x",
             "rag_prompts": [],
@@ -108,28 +108,28 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
             "rewrite_focus": "",
             "rewrite_count": 0,
         },
-        _resources(agent2, llm=FakeLLM()),
+        _resources(agent, llm=FakeLLM()),
     )
     assert out["rag_prompts"] == ["dense1", "dense2", "dense3"]
     assert out["reranker_prompts"] == ["rerank1", "rerank2", "rerank3"]
 
 
 def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: int | None = None
 
     class FakePrompts:
         rag_prompts = [
-            agent2.RagPrompt(rag_prompt="a"),
-            agent2.RagPrompt(rag_prompt="b"),
-            agent2.RagPrompt(rag_prompt="c"),
+            agent.RagPrompt(rag_prompt="a"),
+            agent.RagPrompt(rag_prompt="b"),
+            agent.RagPrompt(rag_prompt="c"),
         ]
         reranker_prompts = [
-            agent2.RerankPrompt(reranker_prompt="r1"),
-            agent2.RerankPrompt(reranker_prompt="r2"),
-            agent2.RerankPrompt(reranker_prompt="r3"),
+            agent.RerankPrompt(reranker_prompt="r1"),
+            agent.RerankPrompt(reranker_prompt="r2"),
+            agent.RerankPrompt(reranker_prompt="r3"),
         ]
 
     class FakeStructured:
@@ -140,7 +140,7 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         def with_structured_output(self, _model, strict: bool = True):
             return FakeStructured()
 
-    out = agent2.generate_retrieval_prompts_node(
+    out = agent.generate_retrieval_prompts_node(
         {
             "input_query": "q",
             "rag_prompts": ["old_r"],
@@ -153,14 +153,14 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
             "rewrite_focus": "нормы",
             "rewrite_count": 0,
         },
-        _resources(agent2, llm=FakeLLM()),
+        _resources(agent, llm=FakeLLM()),
     )
     assert out["rewrite_count"] == 1
     assert out["rag_prompts"] == ["a", "b", "c"]
 
 
 def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: int | None = None
@@ -182,15 +182,15 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
             return [P()]
 
     monkeypatch.setattr(
-        agent2,
+        agent,
         "rerank_with_expanded_queries",
         lambda _qs, texts, model, **kwargs: [(texts[0], 1.0)],
     )
-    monkeypatch.setattr(agent2, "get_part_names_for_model", lambda _m: ["АР", "КР"])
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
-    chunks = agent2._rag_search_and_rerank(
+    chunks = agent._rag_search_and_rerank(
         _resources(
-            agent2,
+            agent,
             qdrant_service=FakeQdrant(),
             collection_name="main",
             runtime_cfg=build_runtime_config("on"),
@@ -206,7 +206,7 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent2
 
     class Out(BaseModel):
         x: int
@@ -239,7 +239,7 @@ def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: int | None = None
@@ -258,9 +258,9 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
 
             return R()
 
-    monkeypatch.setattr(agent2, "validate_and_dump_json_str", lambda _m, _s: '{"x": 2}')
+    monkeypatch.setattr(agent, "validate_and_dump_json_str", lambda _m, _s: '{"x": 2}')
 
-    out = agent2.answer_node(
+    out = agent.answer_node(
         {
             "input_query": "prompt",
             "rag_prompts": [],
@@ -274,13 +274,13 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
             "rewrite_count": 0,
         },
         _config(Out),
-        _resources(agent2, llm=FakeLLM()),
+        _resources(agent, llm=FakeLLM()),
     )
     assert out["answer"] == '{"x": 2}'
 
 
 def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: int | None = None
@@ -296,7 +296,7 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
         def invoke(self, _messages):
             raise RuntimeError("also boom")
 
-    out = agent2.answer_node(
+    out = agent.answer_node(
         {
             "input_query": "prompt",
             "rag_prompts": [],
@@ -310,13 +310,13 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
             "rewrite_count": 0,
         },
         _config(Out),
-        _resources(agent2, llm=FakeLLM()),
+        _resources(agent, llm=FakeLLM()),
     )
     assert out["answer"] == "{}"
 
 
 def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class Out(BaseModel):
         x: list
@@ -330,7 +330,7 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
         def with_structured_output(self, _model, strict: bool = True):
             return FakeStructured()
 
-    out = agent2.answer_node(
+    out = agent.answer_node(
         {
             "input_query": "prompt",
             "rag_prompts": [],
@@ -346,7 +346,7 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
             "rewrite_count": 0,
         },
         _config(Out),
-        _resources(agent2, llm=FakeLLM()),
+        _resources(agent, llm=FakeLLM()),
     )
     data = json.loads(out["answer"])
     assert data["x"] == ['5']
@@ -354,16 +354,16 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
 
 
 def test_route_after_check_limits_rewrites():
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
-    assert agent2.route_after_check({"check_decision": "REWRITE", "rewrite_count": 0}) == "generate_retrieval_prompts_node"
-    assert agent2.route_after_check({"check_decision": "REWRITE", "rewrite_count": 1}) == "generate_retrieval_prompts_node"
-    assert agent2.route_after_check({"check_decision": "REWRITE", "rewrite_count": 2}) == agent2.END
-    assert agent2.route_after_check({"check_decision": "OK", "rewrite_count": 0}) == agent2.END
+    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 0}) == "generate_retrieval_prompts_node"
+    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 1}) == "generate_retrieval_prompts_node"
+    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 2}) == agent.END
+    assert agent.route_after_check({"check_decision": "OK", "rewrite_count": 0}) == agent.END
 
 
 def test_init_graph_2_raises_when_collection_unknown_and_no_project_parts_path(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     class FakeClient:
         def collection_exists(self, _name: str) -> bool:
@@ -373,14 +373,14 @@ def test_init_graph_2_raises_when_collection_unknown_and_no_project_parts_path(m
         def __init__(self):
             self.client = FakeClient()
 
-    monkeypatch.setattr(agent2, "build_qdrant_service", lambda x: FakeQdrant())
+    monkeypatch.setattr(agent, "build_qdrant_service", lambda x: FakeQdrant())
 
     with pytest.raises(ValueError, match="project_parts_path не передан"):
-        agent2.init_graph_2(collection_name="does-not-exist", project_parts_path=None, runtime_cfg=build_runtime_config('on'))
+        agent.init_graph(collection_name="does-not-exist", project_parts_path=None, runtime_cfg=build_runtime_config('on'))
 
 
 def test_init_graph_2_existing_collection_does_not_create(monkeypatch: pytest.MonkeyPatch):
-    import src.agents.agent2 as agent2
+    import src.agents.agent as agent
 
     called = {"create": 0, "fill": 0, "parts": 0}
 
@@ -415,14 +415,14 @@ def test_init_graph_2_existing_collection_does_not_create(monkeypatch: pytest.Mo
         def compile(self):
             return "compiled"
 
-    monkeypatch.setattr(agent2, "build_qdrant_service", lambda x: FakeQdrant())
-    monkeypatch.setattr(agent2, "create_project_parts", lambda _p: called.__setitem__("parts", called["parts"] + 1))
-    monkeypatch.setattr(agent2, "create_collection", lambda *_a, **_k: called.__setitem__("create", called["create"] + 1))
-    monkeypatch.setattr(agent2, "fill_collection", lambda *_a, **_k: called.__setitem__("fill", called["fill"] + 1))
-    monkeypatch.setattr(agent2, "LlmModel", FakeLlmModel)
-    monkeypatch.setattr(agent2, "StateGraph", FakeStateGraph)
+    monkeypatch.setattr(agent, "build_qdrant_service", lambda x: FakeQdrant())
+    monkeypatch.setattr(agent, "create_project_parts", lambda _p: called.__setitem__("parts", called["parts"] + 1))
+    monkeypatch.setattr(agent, "create_collection", lambda *_a, **_k: called.__setitem__("create", called["create"] + 1))
+    monkeypatch.setattr(agent, "fill_collection", lambda *_a, **_k: called.__setitem__("fill", called["fill"] + 1))
+    monkeypatch.setattr(agent, "LlmModel", FakeLlmModel)
+    monkeypatch.setattr(agent, "StateGraph", FakeStateGraph)
 
-    compiled, resources = agent2.init_graph_2(collection_name="main", project_parts_path=None, runtime_cfg=build_runtime_config('off'))
+    compiled, resources = agent.init_graph(collection_name="main", project_parts_path=None, runtime_cfg=build_runtime_config('off'))
     assert compiled == "compiled"
     assert called == {"create": 0, "fill": 0, "parts": 0}
     assert resources.collection_name == "main"

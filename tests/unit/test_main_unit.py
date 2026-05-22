@@ -38,7 +38,7 @@ def test_iter_models_from_module_filters_imported_models(tmp_path: Path, monkeyp
 
 
 def test_thread_run_graph_for_model_parses_json(monkeypatch: pytest.MonkeyPatch):
-    from main2 import thread_run_graph_for_model
+    from main import thread_run_graph_for_model
 
     class M(BaseModel):
         x: int
@@ -46,7 +46,7 @@ def test_thread_run_graph_for_model_parses_json(monkeypatch: pytest.MonkeyPatch)
     def fake_run_graph(*_args, **_kwargs):
         return '{"x": 1}'
 
-    monkeypatch.setattr("main2._run_graph", fake_run_graph)
+    monkeypatch.setattr("main._run_graph", fake_run_graph)
 
     _results = thread_run_graph_for_model(graph=object(), model=M, verbose=False)
     assert _results["model_name"] == "M"
@@ -59,7 +59,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     - запись результата в chapter1_models_output.json
     - удаление коллекции, если имя uuid4 hex и collection_exists=True
     """
-    import main2
+    import main
 
     class M(BaseModel):
         x: int
@@ -84,10 +84,10 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
 
     fake_resources = FakeResources()
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), fake_resources))
-    monkeypatch.setattr("main2.iter_models_from_module", lambda _p: [M])
+    monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), fake_resources))
+    monkeypatch.setattr("main.iter_models_from_module", lambda _p: [M])
     monkeypatch.setattr(
-        "main2.thread_run_graph_for_model",
+        "main.thread_run_graph_for_model",
         lambda **_kwargs: {
             "model_name":"M",
             "result": '{"x": 123}',
@@ -98,7 +98,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
 
     collection_name = "a" * 32  # валидный uuid4 hex проходит проверку в is_valid_uuid4_hex
     out_dir = tmp_path / "out"
-    main2.main(
+    main.main(
         template_docx_path=None,
         project_parts_path=None,
         table_placeholders_path=None,
@@ -120,7 +120,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
 def test_main_filter_mode_uses_iter_chapter_models(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
-    import main2
+    import main
 
     class M(BaseModel):
         x: int
@@ -131,10 +131,10 @@ def test_main_filter_mode_uses_iter_chapter_models(
         called["filter"] = True
         return [M]
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), object()))
-    monkeypatch.setattr("main2.iter_chapter_models", fake_iter_chapter)
+    monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), object()))
+    monkeypatch.setattr("main.iter_chapter_models", fake_iter_chapter)
     monkeypatch.setattr(
-        "main2.thread_run_graph_for_model",
+        "main.thread_run_graph_for_model",
         lambda **_kwargs: {
             "model_name": "M",
             "result": {"x": 1},
@@ -143,7 +143,7 @@ def test_main_filter_mode_uses_iter_chapter_models(
         },
     )
 
-    main2.main(
+    main.main(
         template_docx_path=None,
         project_parts_path=None,
         table_placeholders_path=None,
@@ -158,10 +158,10 @@ def test_main_filter_mode_uses_iter_chapter_models(
 
 
 def test_main_raises_if_no_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from main2 import main
+    from main import main
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), object()))
-    monkeypatch.setattr("main2.iter_models_from_module", lambda _p: [])
+    monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), object()))
+    monkeypatch.setattr("main.iter_models_from_module", lambda _p: [])
 
     with pytest.raises(RuntimeError, match="Не нашёл pydantic-моделей"):
         main(
