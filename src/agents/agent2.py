@@ -1,11 +1,14 @@
 import json
 from pathlib import Path
 from operator import add
+from dataclasses import dataclass
+from pydantic import BaseModel, Field
 from typing import Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, Field
+from langchain_core.language_models import BaseChatModel
 
 from config.config_file import cfg, Config
 from src.models import LlmModel
@@ -28,17 +31,13 @@ from src.utils.validators import validate_and_dump_json_str
 from src.ecology_chapters.chapter1.rag_map import get_part_names_for_model
 
 
-class GraphParams:
-    """Класс для хранения текущего состояния ресурсов графа."""
-
-    def __init__(self):
-        self.collection_name: Optional[str] = None
-        self.qdrant_service: Optional[QdrantService] = None
-        self.llm = None
-        self.runtime_cfg: Config | None = None
-
-
-PARAMS_2 = GraphParams()  # глобальный объект параметров (для agent_2)
+@dataclass(frozen=True)
+class GraphResources:
+    """Ресурсы экземпляра графа"""
+    collection_name: str
+    qdrant_service: QdrantService
+    llm: BaseChatModel
+    runtime_cfg: Config
 
 
 class Agent2State(TypedDict):
@@ -51,9 +50,8 @@ class Agent2State(TypedDict):
     rag_contexts: Annotated[list[str], add]
     reranker_prompts: list[str]
 
-    # agent_node (output_model — класс pydantic-схемы для structured output)
+    # agent_node
     answer: str
-    output_model: type[BaseModel]
 
     # optional loop (rewrite_focus и fields_to_rewrite из check при REWRITE)
     check_decision: Literal["OK", "REWRITE"]
@@ -65,12 +63,16 @@ class Agent2State(TypedDict):
 
 
 def _rag_search_and_rerank(
+    resources: GraphResources,
     rag_prompts: list[str],
     reranker_prompts: list[str],
     output_model: type[BaseModel] | None,
 ) -> list[str]:
-    qdrant_service = PARAMS_2.qdrant_service
-    collection_name = PARAMS_2.collection_name
+    
+    qdrant_service = resources.qdrant_service
+    collection_name = resources.collection_name
+    reranker_model = resources.runtime_cfg.RERANKER_MODEL
+    
     if qdrant_service is None or collection_name is None:
         raise RuntimeError(
             "Qdrant не инициализирован. Сначала вызовите init_graph_2()."
@@ -92,7 +94,9 @@ def _rag_search_and_rerank(
     if not texts:
         return []
     
-    reranked = rerank_with_expanded_queries(reranker_prompts, texts, PARAMS_2.runtime_cfg.RERANKER_MODEL, top_n=5)
+    reranked = rerank_with_expanded_queries(
+        reranker_prompts, texts, reranker_model, top_n=5
+    )
     return [chunk for chunk, _score in reranked]
 
 
@@ -146,7 +150,16 @@ class RetrievalPrompts(BaseModel):
     )
 
 
-def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
+def _get_output_model(config: RunnableConfig) -> type[BaseModel]:
+    output_model = config.get("configurable", {}).get("output_model")
+    if output_model is None:
+        raise ValueError("RunnableConfig.configurable.output_model не передан.")
+    return output_model
+
+
+def generate_retrieval_prompts_node(
+    state: Agent2State, resources: GraphResources
+) -> Agent2State:
     
     input_query = state["input_query"]
     prev_rewrite_count = state.get("rewrite_count", 0)
@@ -185,7 +198,7 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
         )
     )
     
-    llm = PARAMS_2.llm
+    llm = resources.llm
     prompts = llm.with_structured_output(RetrievalPrompts, strict=True).invoke(
         [system_message, human]
     )
@@ -214,11 +227,13 @@ def generate_retrieval_prompts_node(state: Agent2State) -> Agent2State:
     return out
 
 
-def rag_search_node(state: Agent2State) -> Agent2State:
+def rag_search_node(
+    state: Agent2State, config: RunnableConfig, resources: GraphResources
+) -> Agent2State:
     rag_prompts = state["rag_prompts"]
     reranker_prompts = state["reranker_prompts"]
     chunks = _rag_search_and_rerank(
-        rag_prompts, reranker_prompts, state.get("output_model")
+        resources, rag_prompts, reranker_prompts, _get_output_model(config)
     )
     rag_context = format_rag_context(chunks)
     logger.info(
@@ -228,7 +243,9 @@ def rag_search_node(state: Agent2State) -> Agent2State:
     return {"rag_context": rag_context}
 
 
-def answer_node(state: Agent2State) -> Agent2State:
+def answer_node(
+    state: Agent2State, config: RunnableConfig, resources: GraphResources
+) -> Agent2State:
 
     def update_previous_answer_with_new_answer(
         previous_answer: str | None,
@@ -254,10 +271,10 @@ def answer_node(state: Agent2State) -> Agent2State:
             return json.dumps(updated_answer, ensure_ascii=False)
         return new_answer
 
-    llm = PARAMS_2.llm
+    llm = resources.llm
     input_query = state["input_query"]
     rag_context = state["rag_context"]
-    output_model = state["output_model"]
+    output_model = _get_output_model(config)
     previous_answer = state.get("answer")
     fields_to_rewrite = state.get("fields_to_rewrite", [])
 
@@ -317,7 +334,7 @@ def answer_node(state: Agent2State) -> Agent2State:
                 ]
             )
             response_json = validate_and_dump_json_str(
-                state['output_model'], str(getattr(raw, "content", raw))
+                output_model, str(getattr(raw, "content", raw))
             )
             new_answer = response_json
             updated_answer = update_previous_answer_with_new_answer(
@@ -355,13 +372,15 @@ class AnswerCheck(BaseModel):
     )
 
 
-def check_node(state: Agent2State) -> Agent2State:
-    llm = PARAMS_2.llm
+def check_node(
+    state: Agent2State, config: RunnableConfig, resources: GraphResources
+) -> Agent2State:
+    llm = resources.llm
     input_query = state["input_query"]
     rag_contexts = state["rag_contexts"]
     answer = state["answer"]
     
-    output_model = state["output_model"]
+    output_model = _get_output_model(config)
     
     # все поля схемы
     schema_field_names = list(output_model.model_fields.keys())
@@ -413,7 +432,6 @@ def check_node(state: Agent2State) -> Agent2State:
         "rewrite_focus": response.rewrite_focus or "",
         "fields_to_rewrite": fields_to_rewrite,
         "verified_fields": verified_fields,  # add без [] т.к. verified_fields: list
-        "output_model": output_model,
     }
 
 
@@ -423,18 +441,18 @@ def route_after_check(state: Agent2State) -> str:
     return END
 
 
-def init_graph_2(collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None):
+def init_graph_2(
+    collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None = None
+):
     """
     Инициализирует параметры и собирает граф для работы с минисхемами JSON Schema.
     """
     
     runtime_cfg = runtime_cfg or cfg
     
-    PARAMS_2.collection_name = collection_name
-    PARAMS_2.qdrant_service = build_qdrant_service(runtime_cfg)
-    PARAMS_2.runtime_cfg = runtime_cfg
+    qdrant_service = build_qdrant_service(runtime_cfg)
 
-    if not PARAMS_2.qdrant_service.client.collection_exists(collection_name):
+    if not qdrant_service.client.collection_exists(collection_name):
         if not project_parts_path:
             raise ValueError(
                 f"Коллекция {collection_name} не существует. "
@@ -443,20 +461,39 @@ def init_graph_2(collection_name: str, project_parts_path: Path | None, runtime_
             )
         logger.info(f"[agent_2] Создаю новую коллекцию <{collection_name}>")
         project_parts = create_project_parts(
-            project_parts_path=project_parts_path, embedder=PARAMS_2.qdrant_service.model
+            project_parts_path=project_parts_path, embedder=qdrant_service.model
         )
-        create_collection(PARAMS_2.qdrant_service, collection_name)
-        fill_collection(PARAMS_2.qdrant_service, collection_name, project_parts)
+        create_collection(qdrant_service, collection_name)
+        fill_collection(qdrant_service, collection_name, project_parts)
     else:
         logger.info(f"[agent_2] Найдена существующая коллекция <{collection_name}>")
 
-    PARAMS_2.llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
+    llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
+    
+    resources = GraphResources(
+        collection_name=collection_name,
+        qdrant_service=qdrant_service,
+        llm=llm,
+        runtime_cfg=runtime_cfg,
+    )
 
     builder = StateGraph(Agent2State)
-    builder.add_node("generate_retrieval_prompts_node", generate_retrieval_prompts_node)
-    builder.add_node("rag_search_node", rag_search_node)
-    builder.add_node("answer_node", answer_node)
-    builder.add_node("check_node", check_node)
+    builder.add_node(
+        "generate_retrieval_prompts_node",
+        lambda state: generate_retrieval_prompts_node(state, resources),
+    )
+    builder.add_node(
+        "rag_search_node",
+        lambda state, config: rag_search_node(state, config, resources),
+    )
+    builder.add_node(
+        "answer_node",
+        lambda state, config: answer_node(state, config, resources),
+    )
+    builder.add_node(
+        "check_node",
+        lambda state, config: check_node(state, config, resources),
+    )
 
     builder.add_edge(START, "generate_retrieval_prompts_node")
     builder.add_edge("generate_retrieval_prompts_node", "rag_search_node")
@@ -468,4 +505,4 @@ def init_graph_2(collection_name: str, project_parts_path: Path | None, runtime_
         {"generate_retrieval_prompts_node": "generate_retrieval_prompts_node", END: END},
     )
 
-    return builder.compile()
+    return builder.compile(), resources

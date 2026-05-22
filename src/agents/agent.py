@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional, TypedDict
 
@@ -25,17 +26,13 @@ from src.retrieval.qdrant import (
 from src.retrieval.reranker import rerank_chunks
 
 
-class GraphParams:
-    """Класс для хранения текущего состояния ресурсов графа."""
-
-    def __init__(self):
-        self.collection_name: Optional[str] = None
-        self.qdrant_service: Optional[QdrantService] = None
-        self.llm = None
-        self.runtime_cfg: Config | None = None
-
-
-PARAMS = GraphParams()  # глобальный объект параметров
+@dataclass(frozen=True)
+class GraphResources:
+    """Ресурсы экземпляра графа"""
+    collection_name: str
+    qdrant_service: QdrantService
+    llm: object
+    runtime_cfg: Config
 
 
 class AgentState(TypedDict):
@@ -61,10 +58,10 @@ class AgentState(TypedDict):
 # --- Tools ---
 
 
-def search_in_related_disciplines(query: str) -> list[str]:
+def search_in_related_disciplines(query: str, resources: GraphResources) -> list[str]:
     """Найти релевантные части текста в документах смежных разделов."""
-    qdrant_service = PARAMS.qdrant_service
-    collection_name = PARAMS.collection_name
+    qdrant_service = resources.qdrant_service
+    collection_name = resources.collection_name
     if qdrant_service is None or collection_name is None:
         raise RuntimeError("Qdrant не инициализирован. Сначала вызовите init_graph().")
 
@@ -72,16 +69,18 @@ def search_in_related_disciplines(query: str) -> list[str]:
         query, collection_name=collection_name, limit=50
     )
     texts = [point.payload["text"] for point in relevant_points]
-    reranked = rerank_chunks(query, texts, reranker_model=PARAMS.runtime_cfg.RERANKER_MODEL, top_n=5)
+    reranked = rerank_chunks(
+        query, texts, reranker_model=resources.runtime_cfg.RERANKER_MODEL, top_n=5
+    )
     return [chunk for chunk, _score in reranked]
 
 
 # --- Nodes ---
 
 
-def rag_search_node(state: AgentState) -> AgentState:
+def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
     rag_query = state.get("rag_query") or state["input_query"]
-    chunks = search_in_related_disciplines(rag_query)
+    chunks = search_in_related_disciplines(rag_query, resources)
     rag_context = format_rag_context(chunks)
     logger.info(f"RAG search completed for query: {rag_query}")
     return {
@@ -90,8 +89,8 @@ def rag_search_node(state: AgentState) -> AgentState:
     }
 
 
-def answer_node(state: AgentState) -> AgentState:
-    llm = PARAMS.llm
+def answer_node(state: AgentState, resources: GraphResources) -> AgentState:
+    llm = resources.llm
     system_message = SystemMessage(
         "Ты помощник по поиску данных по строительному проекту. "
         "Отвечай только на основе переданного RAG-контекста. "
@@ -130,8 +129,8 @@ class AnswerCheck(BaseModel):
     )
 
 
-def check_node(state: AgentState) -> AgentState:
-    llm = PARAMS.llm
+def check_node(state: AgentState, resources: GraphResources) -> AgentState:
+    llm = resources.llm
     system_message = SystemMessage(
         "Проверь, отвечает ли ответ на запрос пользователя и достаточно ли он "
         "подтвержден RAG-контекстом. Верни OK, если ответ можно использовать. "
@@ -156,8 +155,8 @@ def check_node(state: AgentState) -> AgentState:
     }
 
 
-def rewrite_query_node(state: AgentState) -> AgentState:
-    llm = PARAMS.llm
+def rewrite_query_node(state: AgentState, resources: GraphResources) -> AgentState:
+    llm = resources.llm
     system_message = SystemMessage(
         "Перепиши запрос для RAG-поиска так, чтобы следующий поиск нашел "
         "контекст, которого не хватило для ответа. Верни только текст запроса."
@@ -196,20 +195,19 @@ def route_after_check(state: AgentState) -> str:
 # --- Инициализация графа ---
 
 
-def init_graph(collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None):
+def init_graph(
+    collection_name: str, project_parts_path: Path | None, runtime_cfg: Config | None = None
+):
     """
     Инициализирует параметры и собирает граф.
     """
     
     runtime_cfg = runtime_cfg or cfg
 
-    # Обновляем глобальные параметры
-    PARAMS.collection_name = collection_name
-    PARAMS.qdrant_service = build_qdrant_service(runtime_cfg)
-    PARAMS.runtime_cfg = runtime_cfg
+    qdrant_service = build_qdrant_service(runtime_cfg)
 
     # Создаем и заполняем новую коллекцию, при необходимости
-    if not PARAMS.qdrant_service.client.collection_exists(collection_name):
+    if not qdrant_service.client.collection_exists(collection_name):
         if not project_parts_path:
             raise ValueError(
                 f"Коллекция {collection_name} не существует. "
@@ -218,20 +216,31 @@ def init_graph(collection_name: str, project_parts_path: Path | None, runtime_cf
             )
         logger.info(f"Создаю новую коллекцию <{collection_name}>")
         project_parts = create_project_parts(
-            project_parts_path=project_parts_path, embedder=PARAMS.qdrant_service.model
+            project_parts_path=project_parts_path, embedder=qdrant_service.model
         )
-        create_collection(PARAMS.qdrant_service, collection_name)
-        fill_collection(PARAMS.qdrant_service, collection_name, project_parts)
+        create_collection(qdrant_service, collection_name)
+        fill_collection(qdrant_service, collection_name, project_parts)
     else:
         logger.info(f"Найдена существующая коллекция <{collection_name}>")
 
-    PARAMS.llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
+    llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
+    
+    resources = GraphResources(
+        collection_name=collection_name,
+        qdrant_service=qdrant_service,
+        llm=llm,
+        runtime_cfg=runtime_cfg,
+    )
 
     builder = StateGraph(AgentState)
-    builder.add_node("rag_search_node", rag_search_node)
-    builder.add_node("answer_node", answer_node)
-    builder.add_node("check_node", check_node)
-    builder.add_node("rewrite_query_node", rewrite_query_node)
+    builder.add_node(
+        "rag_search_node", lambda state: rag_search_node(state, resources)
+    )
+    builder.add_node("answer_node", lambda state: answer_node(state, resources))
+    builder.add_node("check_node", lambda state: check_node(state, resources))
+    builder.add_node(
+        "rewrite_query_node", lambda state: rewrite_query_node(state, resources)
+    )
     builder.add_edge(START, "rag_search_node")
     builder.add_edge("rag_search_node", "answer_node")
     builder.add_edge("answer_node", "check_node")
@@ -242,12 +251,12 @@ def init_graph(collection_name: str, project_parts_path: Path | None, runtime_cf
     )
     builder.add_edge("rewrite_query_node", "rag_search_node")
 
-    return builder.compile()
+    return builder.compile(), resources
 
 
 if __name__ == "__main__":
 
-    graph = init_graph(
+    graph, _resources = init_graph(
         collection_name="main", project_parts_path=Path("../../data/IN/project1/trim")
     )
 

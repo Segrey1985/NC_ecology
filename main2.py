@@ -8,7 +8,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.agents.agent2 import init_graph_2, PARAMS_2
+from src.agents.agent2 import GraphResources, init_graph_2
 from config.config_file import build_runtime_config
 from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
@@ -33,14 +33,21 @@ def _run_graph(
     verbose: bool = True,
 ) -> str:
 
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config = {
+        "configurable": {
+            "thread_id": str(uuid.uuid4()),
+            "output_model": output_model,
+        },
+        "metadata": {
+            "output_model": output_model.__name__,
+        },
+    }
     config.update(langfuse_config)
 
     final_content = ""
     for chunk in graph.stream(
         input={
             "input_query": input_query,
-            "output_model": output_model,
         },
         stream_mode="updates",
         config=config,
@@ -102,13 +109,14 @@ def main(
     test_mode: Literal["on", "off", "mock", "filter"] = "on",
     max_workers: int | None = None,
 ):
+    resources: GraphResources | None = None
     try:
         
         runtime_cfg = build_runtime_config(test_mode)
         
         # init graph
 
-        graph = init_graph_2(
+        graph, resources = init_graph_2(
             collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
         )
 
@@ -211,7 +219,7 @@ def main(
                     output_docx_path=result_template_out_path,
                 )
     finally:
-        qdrant_service = PARAMS_2.qdrant_service
+        qdrant_service = getattr(resources, "qdrant_service", None)
         if (
             qdrant_service
             and qdrant_service.client.collection_exists(collection_name)

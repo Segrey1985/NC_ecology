@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from src.agents.agent import init_graph, PARAMS
+from src.agents.agent import GraphResources, init_graph
 from config.langfuse_client import langfuse_config
 from config.config_file import build_runtime_config
 from src.utils.logger import logger
@@ -71,10 +71,11 @@ def main(
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock"] = "on",
 ):
+    resources: GraphResources | None = None
     try:
         runtime_cfg = build_runtime_config(test_mode)
         
-        graph = init_graph(
+        graph, resources = init_graph(
             collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
         )
     
@@ -122,9 +123,11 @@ def main(
                     output_docx_path=result_template_out_path,
                 )
     finally:
-        qdrant_service = PARAMS.qdrant_service
-        if qdrant_service.client.collection_exists(collection_name) and is_valid_uuid4_hex(
-            collection_name
+        qdrant_service = getattr(resources, "qdrant_service", None)
+        if (
+            qdrant_service
+            and qdrant_service.client.collection_exists(collection_name)
+            and is_valid_uuid4_hex(collection_name)
         ):
             qdrant_service.client.delete_collection(collection_name)
             logger.info(

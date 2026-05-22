@@ -78,13 +78,14 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
         def __init__(self):
             self.client = FakeClient()
 
-    class FakeParams:
+    class FakeResources:
         def __init__(self):
             self.qdrant_service = FakeQdrantService()
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: object())
+    fake_resources = FakeResources()
+
+    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), fake_resources))
     monkeypatch.setattr("main2.iter_models_from_module", lambda _p: [M])
-    monkeypatch.setattr("main2.PARAMS_2", FakeParams())
     monkeypatch.setattr(
         "main2.thread_run_graph_for_model",
         lambda **_kwargs: {
@@ -113,7 +114,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     assert out_json.exists()
     assert out_json.read_text(encoding="utf-8").strip() != ""
     assert "M" in out_json.read_text(encoding="utf-8")
-    assert main2.PARAMS_2.qdrant_service.client.deleted == [collection_name]
+    assert fake_resources.qdrant_service.client.deleted == [collection_name]
 
 
 def test_main_filter_mode_uses_iter_chapter_models(
@@ -130,7 +131,7 @@ def test_main_filter_mode_uses_iter_chapter_models(
         called["filter"] = True
         return [M]
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: object())
+    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), object()))
     monkeypatch.setattr("main2.iter_chapter_models", fake_iter_chapter)
     monkeypatch.setattr(
         "main2.thread_run_graph_for_model",
@@ -159,7 +160,7 @@ def test_main_filter_mode_uses_iter_chapter_models(
 def test_main_raises_if_no_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from main2 import main
 
-    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: object())
+    monkeypatch.setattr("main2.init_graph_2", lambda *args, **kwargs: (object(), object()))
     monkeypatch.setattr("main2.iter_models_from_module", lambda _p: [])
 
     with pytest.raises(RuntimeError, match="Не нашёл pydantic-моделей"):

@@ -93,6 +93,7 @@ TestMode = Literal["off", "on", "mock", "filter"]
 
 
 def build_runtime_config(test_mode: TestMode) -> Config:
+    """Копия и доп. настройка параметров cfg"""
     runtime_config = cfg.model_copy(deep=True)
     
     if test_mode != "off":
