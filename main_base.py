@@ -1,7 +1,9 @@
 import json
 import uuid
+import threading
 from pathlib import Path
 from typing import Literal
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent_base import GraphResources, init_graph
 from config.langfuse_client import langfuse_config
@@ -9,11 +11,6 @@ from config.config_file import build_runtime_config
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.docx_template_engine import fill_docx_template
-
-__placeholders_example = {
-    "НАИМЕНОВАНИЕ_ПРОЕКТА": "Наименование проекта",
-    "ТИП_РАБОТ": " тип строительных работ для склонения в тексте (например, 'строительства', 'реконструкции', 'технического перевооружения').",
-}
 
 
 def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | None):
@@ -61,6 +58,44 @@ def _run_graph(
     return final_content
 
 
+def _log_thread():
+    log_lines = []
+    thread_ident = threading.get_ident()
+
+    def _only_this_thread(record) -> bool:
+        return record["thread"].id == thread_ident
+
+    def _capture_sink(message) -> None:
+        log_lines.append(message.strip())
+
+    handler_id = logger.add(_capture_sink, filter=_only_this_thread, colorize=True)
+    return handler_id, log_lines
+
+
+def thread_run_graph_for_placeholder(
+    graph,
+    placeholder: str,
+    placeholder_info: dict,
+    verbose: bool,
+) -> dict:
+    handler_id, log_lines = _log_thread()
+
+    try:
+        final_content = _run_graph(
+            graph=graph,
+            input_for_rag_search=placeholder_info["for_rag_search"],
+            input_for_agent_prompt=placeholder_info["for_agent_prompt"],
+            verbose=verbose,
+        )
+        return {
+            "placeholder": placeholder,
+            "result": json.loads(final_content).get("answer", "__empty__"),
+            "logs_lines": log_lines,
+        }
+    finally:
+        logger.remove(handler_id)
+
+
 def main(
     template_docx_path: Path | None,
     placeholders_path: Path,
@@ -70,6 +105,7 @@ def main(
     collection_name: str = "main",
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock"] = "on",
+    max_workers: int | None = None,
 ):
     resources: GraphResources | None = None
     try:
@@ -92,21 +128,42 @@ def main(
             )
         else:
             placeholders_output = {}
+            total_results: list[dict] = []
     
             for key, value in table_placeholders.items():
                 placeholders_output[key] = value
-    
-            for placeholder, placeholder_info in placeholders.items():
-                input_for_rag_search = placeholder_info["for_rag_search"]
-                input_for_agent_prompt = placeholder_info["for_agent_prompt"]
-                final_content = _run_graph(
-                    graph, input_for_rag_search, input_for_agent_prompt, verbose=verbose
-                )
-                placeholders_output[placeholder] = json.loads(final_content).get(
-                    "answer", "__empty__"
-                )
-                if test_mode == "on":
-                    break
+
+            placeholder_items = list(placeholders.items())
+            if test_mode == "on":
+                placeholder_items = placeholder_items[:1]
+
+            if max_workers is None:
+                max_workers = min(4, max(1, len(placeholder_items)))
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(
+                        thread_run_graph_for_placeholder,
+                        graph=graph,
+                        placeholder=placeholder,
+                        placeholder_info=placeholder_info,
+                        verbose=verbose,
+                    )
+                    for placeholder, placeholder_info in placeholder_items
+                ]
+
+                for future in as_completed(futures):
+                    dct = future.result()
+                    placeholders_output[dct["placeholder"]] = dct["result"]
+                    total_results.append(dct)
+
+            for t in total_results:
+                placeholder = t["placeholder"]
+                log_lines = t["logs_lines"]
+                print(f"\n--- Логи потока {placeholder} ({len(log_lines)} записей) ---")
+                for line in log_lines:
+                    print(line)
+                print("--- конец логов потока ---\n")
     
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
@@ -143,8 +200,8 @@ if __name__ == "__main__":
         template_docx_path=input_dir / "template.docx",
         placeholders_path=input_dir / "placeholders.json",
         table_placeholders_path=input_dir / "table_placeholders.json",
-        project_parts_path=None,
+        project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"),
         output_path=base / "data" / "OUT" / "project1",
-        collection_name="main",
-        test_mode="on",
+        collection_name="main_base_test_off",
+        test_mode="off",
     )
