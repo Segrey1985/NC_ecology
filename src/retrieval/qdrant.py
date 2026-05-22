@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, VectorParams, PointStruct, ScoredPoint
 from qdrant_client.models import Filter, FieldCondition, MatchAny
 
@@ -108,6 +109,10 @@ class QdrantService:
                 query_filter=parts_filter,
             ).points
             return search_result
+        except UnexpectedResponse as exc:
+            if "vector dimension error" in str(exc).lower():
+                logger.error(f"[qdrant] Vector dimension error. collection={collection_name}")
+            raise
         except Exception:
             logger.exception(
                 "[qdrant] Failed to encode/query. Returning empty search result. "
