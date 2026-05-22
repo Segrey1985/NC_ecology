@@ -459,14 +459,12 @@ def init_graph(
                 f"Требуется создание коллекции из project_parts_path. "
                 f"Аргумент project_parts_path не передан."
             )
-        logger.info(f"[agent_2] Создаю новую коллекцию <{collection_name}>")
-        project_parts = create_project_parts(
-            project_parts_path=project_parts_path, embedder=qdrant_service.model
-        )
+        logger.info(f"Creating new collection <{collection_name}>")
         create_collection(qdrant_service, collection_name)
+        project_parts = create_project_parts(project_parts_path=project_parts_path)
         fill_collection(qdrant_service, collection_name, project_parts)
     else:
-        logger.info(f"[agent_2] Найдена существующая коллекция <{collection_name}>")
+        logger.info(f"Found existing collection: <{collection_name}>")
 
     llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
     

@@ -38,6 +38,8 @@ def init_embedder(model_name: str):
 class QdrantService:
     """Класс для создания коллекций, добавления в них точек и поиска похожих точек."""
 
+    DISCIPLINE_BY_NUMBER = cfg.DISCIPLINE_BY_NUMBER
+
     def __init__(self, client: QdrantClient, model: SentenceTransformer):
         self.client = client
         self.model = model
@@ -63,7 +65,7 @@ class QdrantService:
                     distance=Distance.COSINE,
                 ),
             )
-            logger.info(f"Created collection {collection_name}.")
+            logger.info(f"Collection <{collection_name}> has been created.")
 
     def add_points_to_collection(
         self, collection_name: str, points: list[PointStruct], batch_size=32
@@ -71,6 +73,51 @@ class QdrantService:
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
             self.client.upsert(collection_name=collection_name, wait=True, points=batch)
+
+    def _calculate_vectors(self, chunks: list[str]) -> list[list[float]]:
+        if not chunks:
+            raise ValueError("Cannot calculate vectors: chunks list is empty")
+
+        vectors = self.model.encode(chunks)
+        return [
+            vector if isinstance(vector, list) else vector.tolist()
+            for vector in vectors
+        ]
+
+    def _build_payload(self, project_part: "ProjectPart") -> list[dict]:
+        if not project_part.chunks:
+            raise ValueError(
+                "Cannot build payload: ProjectPart.chunks list is empty"
+            )
+
+        base = self._build_part_payload(project_part.file_path)
+        return [{**base, "text": chunk} for chunk in project_part.chunks]
+
+    def _build_part_payload(self, file_path: Path) -> dict:
+        stem = file_path.stem
+        part_ = stem.split("_")[0]
+        parts_split_by_point = part_.split(".")
+        if len(parts_split_by_point) == 1:
+            part_number = parts_split_by_point[0]
+        else:
+            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
+
+        return {
+            "part_number": part_number,
+            "part_name": self.DISCIPLINE_BY_NUMBER.get(
+                part_number, self.DISCIPLINE_BY_NUMBER["прочее"]
+            ),
+        }
+
+    def calculate_points(self, project_part: "ProjectPart") -> list[PointStruct]:
+        """Сборная функция. Вычисляет эмбеддинги, добавляет payload, формирует и возвращает список PointStruct."""
+        logger.debug(f"Calculating points for <{project_part.file_path}> ...")
+        vectors = self._calculate_vectors(project_part.chunks)
+        payload = self._build_payload(project_part)
+        return [
+            PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload_item)
+            for payload_item, vector in zip(payload, vectors)
+        ]
     
     # part_names = ['ПЗ', 'ПЗУ', 'АР', 'КР', 'ИОС', 'Система электроснабжения', 'Система водоснабжения', 'Система водоотведения',
     #  'Отопление, вентиляция и кондиционирование воздуха, тепловые сети', 'Сети связи', 'Система газоснабжения']
@@ -133,26 +180,24 @@ def build_qdrant_service(runtime_cfg: Config) -> QdrantService:
 
 class ProjectPart:
     """Класс описывающий смежный раздел проектной документации (АР, КР, ИОС ...)"""
-    
-    DISCIPLINE_BY_NUMBER = cfg.DISCIPLINE_BY_NUMBER
 
-    def __init__(self, file_path: Path, embedder=None) -> None:
+    def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
-        self.embedder = embedder
-        self.texts_by_page: Optional[list[str]] = None
-        self.text: Optional[str] = None
         self.chunks: Optional[list[str]] = None
-        self.vectors: Optional[list[list[float]]] = None
-        self.payload: Optional[list[dict]] = None
-        self.points: Optional[list[PointStruct]] = None
 
-    def extract_text(self) -> None:
-        self.texts_by_page = extract_text_with_miner_coords(self.file_path)
-        self.text = " ".join(self.texts_by_page)
+    def extract_text(self) -> str:
+        texts_by_page = extract_text_with_miner_coords(self.file_path)
+        return " ".join(texts_by_page)
 
-    def make_chunks(self, chunk_size=750, chunk_overlap=150) -> None:
-        if not self.text:
-            raise ValueError("Can't make chunks: ProjectPart.text is empty")
+    def make_chunks(
+        self,
+        text: str | None = None,
+        chunk_size=750,
+        chunk_overlap=150,
+    ) -> None:
+        text = text or self.extract_text()
+        if not text:
+            raise ValueError("Can't make chunks: extracted text is empty")
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -162,69 +207,14 @@ class ProjectPart:
             separators=["\n\n", r"[\.\:\;] (?=[А-ЯЁA-Z])", "\n", " ", ""],
             keep_separator="end",
         )
-        chunks = text_splitter.split_text(self.text)
+        chunks = text_splitter.split_text(text)
         # пропускаем пустые и очень короткие чанки
         filtered_chunks = list(filter(lambda x: x and len(x.strip()) > 20, chunks))
         self.chunks = filtered_chunks
 
-    def calculate_vectors(self) -> None:
-        if not self.chunks:
-            raise ValueError(
-                "Cannot calculate vectors: ProjectPart.chunks list is empty"
-            )
-        if not self.embedder:
-            raise ValueError(
-                "Cannot calculate vectors: embedder was not passed to ProjectPart __init__"
-            )
-        vectors = self.embedder.encode(self.chunks)
-        vectors = [
-            vector if isinstance(vector, list) else vector.tolist()
-            for vector in vectors
-        ]
-        self.vectors = vectors
-
-    def build_payload(self) -> None:
-        base = {}
-        self._payload_add_part(base)
-        self.payload = self._payload_add_text(base)  # теперь list[dict]
-
-    def _payload_add_part(self, payload) -> None:
-        stem = self.file_path.stem
-        part_ = stem.split("_")[0]
-        parts_split_by_point = part_.split(".")
-        if len(parts_split_by_point) == 1:
-            part_number = parts_split_by_point[0]
-        else:
-            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
-        payload["part_number"] = part_number
-        payload["part_name"] = self.DISCIPLINE_BY_NUMBER.get(
-            part_number, self.DISCIPLINE_BY_NUMBER["прочее"]
-        )
-
-    def _payload_add_text(self, base: dict) -> list[dict]:
-        return [{**base, "text": chunk} for chunk in self.chunks]
-
-    def calculate_points(self) -> None:
-        if not self.vectors:
-            raise ValueError(
-                "Cannot calculate points: ProjectPart.vectors list is empty"
-            )
-        logger.debug(f"Calculating points for <{self.file_path}> ...")
-        self.points = [
-            PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload)
-            for payload, vector in zip(self.payload, self.vectors)
-        ]
-
-    def run(self) -> None:
-        self.extract_text()
-        self.make_chunks()
-        self.build_payload()
-        self.calculate_vectors()
-        self.calculate_points()
-
     def __repr__(self):
         return json.dumps(
-            {"file": self.file_path.as_posix(), "payload": self.payload},
+            {"file": self.file_path.as_posix(), "chunks": self.chunks},
             ensure_ascii=False,
         )
 
@@ -232,25 +222,25 @@ class ProjectPart:
 # _______________ вспомогательные функции _______________
 
 
-def _collect_project_parts(folder_path: Path, embedder) -> list[ProjectPart]:
+def _collect_project_parts(folder_path: Path) -> list[ProjectPart]:
     """Ищет все файлы .pdf в директории и превращает их в list[ProjectPart]"""
     project_parts = []
     for file in folder_path.iterdir():
         if file.suffix == ".pdf":
-            project_parts.append(ProjectPart(file_path=file, embedder=embedder))
+            project_parts.append(ProjectPart(file_path=file))
     return project_parts
 
 
-def create_project_parts(project_parts_path: Path, embedder=None) -> list[ProjectPart]:
-    """Собирает все .pdf файлы в директории, превращает их в list[ProjectPart] и вычисляет Point для qdrant"""
-    project_parts: list[ProjectPart] = _collect_project_parts(project_parts_path, embedder=embedder)
+def create_project_parts(project_parts_path: Path) -> list[ProjectPart]:
+    """Собирает все .pdf файлы в директории, превращает их в list[ProjectPart] и нарезает на чанки."""
+    project_parts: list[ProjectPart] = _collect_project_parts(project_parts_path)
 
-    def _run(part: ProjectPart) -> None:
-        part.run()
-        logger.debug(f"project_part <{part.file_path.name}> сформирован.")
+    def _make_chunks(part: ProjectPart) -> None:
+        part.make_chunks()
+        logger.debug(f"{part.file_path.name} chunks complete.")
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(_run, part) for part in project_parts]
+        futures = [executor.submit(_make_chunks, part) for part in project_parts]
         for f in as_completed(futures):
             f.result()  # пробрасываем исключения
 
@@ -267,12 +257,21 @@ def fill_collection(
     collection_name: str,
     project_parts: list[ProjectPart],
 ) -> None:
-    """Для каждого project_part добавляет project_part.points в коллекцию collection_name сервиса qdrant_service"""
-    for project_part in project_parts:
-        qdrant_service.add_points_to_collection(
-            collection_name=collection_name,
-            points=project_part.points,
-        )
+    """Параллельно считает PointStruct и добавляет готовые части в коллекцию."""
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(qdrant_service.calculate_points, part): part
+            for part in project_parts
+        }
+        for future in as_completed(futures):
+            project_part = futures[future]
+            points = future.result()  # пробрасываем исключения
+            qdrant_service.add_points_to_collection(
+                collection_name=collection_name,
+                points=points,
+            )
+            logger.debug(f"Project part '{project_part.file_path.name}' was added to Qdrant.")
 
 
 if __name__ == "__main__":
@@ -281,7 +280,6 @@ if __name__ == "__main__":
         file_path=cfg.BASE_DIR / "data" / "IN" / "project1" / "1_ОК.17.24СТ-ПЗ.pdf"
     )
     print(pp)
-    pp.extract_text()
     pp.make_chunks()
 
     for chunk in pp.chunks:

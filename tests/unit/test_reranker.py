@@ -1,16 +1,14 @@
 from pathlib import Path
 
 from src.retrieval.qdrant import ProjectPart
-from src.retrieval.embeddings import init_openai_embedder
 from config.config_file import cfg
 
 project_part = ProjectPart(
     file_path = Path(
         r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
-    ),
-    embedder = init_openai_embedder("text-embedding-3-small")
+    )
 )
-project_part.run()
+project_part.make_chunks()
 chunks = project_part.chunks
 query = "Наименование объекта строительства"
 

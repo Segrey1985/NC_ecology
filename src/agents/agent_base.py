@@ -242,14 +242,12 @@ def init_graph(
                 f"Требуется создание коллекции из project_parts_path. "
                 f"Аргумент project_parts_path не передан."
             )
-        logger.info(f"Создаю новую коллекцию <{collection_name}>")
-        project_parts = create_project_parts(
-            project_parts_path=project_parts_path, embedder=qdrant_service.model
-        )
+        logger.info(f"Creating new collection <{collection_name}>")
         create_collection(qdrant_service, collection_name)
+        project_parts = create_project_parts(project_parts_path=project_parts_path)
         fill_collection(qdrant_service, collection_name, project_parts)
     else:
-        logger.info(f"Найдена существующая коллекция <{collection_name}>")
+        logger.info(f"Found existing collection: <{collection_name}>")
 
     llm = LlmModel(model_type="ai_tunnel", model_name=runtime_cfg.MODEL_NAME).create()
     
@@ -285,7 +283,7 @@ def init_graph(
 if __name__ == "__main__":
 
     graph, _resources = init_graph(
-        collection_name="main", project_parts_path=Path("../../data/IN/project1/trim")
+        collection_name="agent_base2", project_parts_path=Path("../../data/IN/project1/trim/mini")
     )
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}

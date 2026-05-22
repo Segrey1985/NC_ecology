@@ -22,12 +22,10 @@ def test_qdrant_minibase_from_trim_first3_and_cleanup():
         qdrant_service.create_collection(collection_name=collection_name)
 
         for pdf_path in pdfs:
-            part = ProjectPart(file_path=pdf_path, embedder=qdrant_service.model)
-            part.run()
-            qdrant_service.add_points_to_collection(
-                collection_name=collection_name,
-                points=part.points,
-            )
+            part = ProjectPart(file_path=pdf_path)
+            part.make_chunks()
+            points = qdrant_service.calculate_points(part)
+            qdrant_service.add_points_to_collection(collection_name, points)
 
         results = qdrant_service.run_query(
             query="Как называется проект?",
