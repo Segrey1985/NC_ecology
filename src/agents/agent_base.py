@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from src.utils.logger import logger
 from config.config_file import cfg, Config
 from config.langfuse_client import langfuse_config
-from src.models import LlmModel
+from src.llm import LlmModel
 from src.utils.utils import print_chunk, format_rag_context
 from src.pydantic_models import StructuredResponse
 from src.retrieval.qdrant import (

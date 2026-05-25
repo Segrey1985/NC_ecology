@@ -3,8 +3,8 @@ import importlib
 from langchain_core.language_models import BaseChatModel
 
 MODEL_REGISTRY = {
-    "ollama": "src.models.model_ollama:create_model",
-    "ai_tunnel": "src.models.model_ai_tunnel:create_model",
+    "ollama": "src.llm.model_ollama:create_model",
+    "ai_tunnel": "src.llm.model_ai_tunnel:create_model",
 }
 
 

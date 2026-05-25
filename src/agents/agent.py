@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langchain_core.language_models import BaseChatModel
 
 from config.config_file import cfg, Config
-from src.models import LlmModel
+from src.llm import LlmModel
 from src.retrieval.qdrant import (
     QdrantService,
     build_qdrant_service,
