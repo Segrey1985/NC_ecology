@@ -611,21 +611,6 @@ def filter_mode_assembly_to_docx_context(
 # ____________ main ____________
 
 
-def update_with_table_placeholders(
-    data_dict: dict, table_placeholders_path: Path
-) -> None:
-
-    with open(table_placeholders_path, "r", encoding="utf-8") as f:
-        table_placeholders: list[dict] = json.load(f)
-
-    if not isinstance(table_placeholders, list):
-        logger.error("table_placeholders должны быть списком словарей.")
-
-    for placeholder_dict in table_placeholders:
-        name_value_dict = {placeholder_dict["key"]: placeholder_dict["value"]}
-        data_dict.update(name_value_dict)
-
-
 if __name__ == "__main__":
 
     # найти номера страниц файла, где заголовком будет text1, text2

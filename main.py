@@ -1,5 +1,6 @@
 import json
 import uuid
+import traceback
 import threading
 from pathlib import Path
 from typing import Literal
@@ -21,7 +22,6 @@ from src.utils.utils import (
     filter_mode_payload_and_validate,
     filter_mode_assembly_to_docx_context,
     build_input_query,
-    update_with_table_placeholders
 )
 from src.templates.docx_template_engine import fill_docx_template
 
@@ -208,7 +208,12 @@ def main(
                     data_dict = data.model_dump(mode="json")
                 
                 if table_placeholders_path:
-                    update_with_table_placeholders(data_dict, table_placeholders_path=table_placeholders_path)
+                    try:
+                        with open(table_placeholders_path, "r", encoding="utf-8") as f:
+                            table_placeholders: dict = json.load(f)
+                            data_dict.update(table_placeholders)
+                    except Exception:
+                        logger.error(traceback.format_exc())
                 
                 result_template_out_path = (
                     output_path / f"{chapter_module_path.split('.')[-1]}.docx"
@@ -238,10 +243,10 @@ if __name__ == "__main__":
     main(
         template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
         project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\chapter2"),
-        table_placeholders_path=None,
+        table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\schemas\chapter2\table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter2",
-        collection_name="chapter2",
-        test_mode="off",
+        collection_name="all",
+        test_mode="filter",
         max_workers=8,
     )
