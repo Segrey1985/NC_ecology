@@ -76,7 +76,7 @@ def rerank_with_api(
     response = requests.post(
         "https://api.aitunnel.ru/v1/rerank",
         headers={
-            "Authorization": f"Bearer {cfg.AI_TUNNEL_API_KEY}",
+            "Authorization": f"Bearer {cfg.ai_tunnel_api_key}",
             "Content-Type": "application/json",
         },
         json={"model": model_name, "query": query, "documents": chunks, "top_n": top_n},

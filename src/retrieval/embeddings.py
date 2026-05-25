@@ -26,7 +26,7 @@ def load_local_embedder(model_name: str):
 
 def load_openai_embeddings_client() -> OpenAI:
     client = OpenAI(
-        api_key=cfg.AI_TUNNEL_API_KEY, base_url="https://api.aitunnel.ru/v1/"
+        api_key=cfg.ai_tunnel_api_key, base_url="https://api.aitunnel.ru/v1/"
     )
     return client
 

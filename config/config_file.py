@@ -63,6 +63,14 @@ class Config(BaseSettings):
     RERANKER_MODEL: str = "rerank-4-pro"
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
+
+    @property
+    def hf_token(self) -> str:
+        return self.HF_TOKEN.get_secret_value()
+
+    @property
+    def ai_tunnel_api_key(self) -> str:
+        return self.AI_TUNNEL_API_KEY.get_secret_value()
     
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
         "1": "ПЗ",
