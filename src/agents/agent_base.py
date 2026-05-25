@@ -15,7 +15,7 @@ from config.config_file import cfg, Config
 from config.langfuse_client import langfuse_config
 from src.llm import LlmModel
 from src.utils.utils import print_chunk, format_rag_context
-from src.pydantic_models import StructuredResponse
+from src.pydantic_models.agent_base_models import StructuredResponse
 from src.retrieval.qdrant import (
     QdrantService,
     build_qdrant_service,
