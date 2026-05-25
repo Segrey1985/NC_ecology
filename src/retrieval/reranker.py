@@ -81,6 +81,11 @@ def rerank_with_api(
         },
         json={"model": model_name, "query": query, "documents": chunks, "top_n": top_n},
     )
+    
+    if response.status_code != 200:
+        logger.error(f"{response.status_code}: {response.text}")
+        return []
+    
     reranked = [
         (x["document"]["text"], x["relevance_score"])
         for x in response.json()["results"]

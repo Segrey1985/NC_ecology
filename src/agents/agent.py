@@ -97,6 +97,12 @@ def _rag_search_and_rerank(
     reranked = rerank_with_expanded_queries(
         reranker_prompts, texts, reranker_model, top_n=5
     )
+    
+    # fallback
+    if not reranked:
+        logger.warning("? reranker returned no results ?; fallback to retrieval results")
+        return texts[:5]
+        
     return [chunk for chunk, _score in reranked]
 
 

@@ -65,10 +65,7 @@ def multiple_rerank(
             try:
                 ranked = future.result()
             except Exception:
-                logger.exception(
-                    "[reranker_expansion] rerank failed for query=%r",
-                    query,
-                )
+                logger.exception(f"[reranker_expansion] rerank failed for {query=}")
                 ranked = []
             results[idx] = (query, ranked)
 
