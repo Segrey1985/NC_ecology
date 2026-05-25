@@ -1,4 +1,27 @@
+ПРОЕКТИРОВЩИКАМ:
+
 Перечень требований к исходным данным:  
 - project_parts_path  
 Директория должна содержать все файлы смежных разделов ПД.  
 Наименование должно быть в формате 1_, 2_, 3_, 4_, 5.1.1_...5.6.2_, 6.1_, 7_, 8_, 9.1_, 10_
+
+
+РАЗРАБОТЧИКАМ:
+
+- схема работы конфигов:
+
+```code
+main.py:
+
+    runtime_config = build_runtime_config()  # относится к main.py
+
+    init_graph(runtime_config)
+
+    ThreadPoolExecutor:
+
+        _run_graph()
+        
+            config = config(thread_id, output_model) # относится к отдельному графу
+        
+            graph.stream(config)        
+```
