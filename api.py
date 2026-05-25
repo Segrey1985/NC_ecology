@@ -160,6 +160,90 @@ async def chapter0(
             media_type="application/zip",
             headers={"Content-Disposition": "attachment; filename=result.zip"},
         )
+    
+
+# -------------------------------------------- chapters 1, 2, ... --------------------------------------------
+
+
+async def _generate_chapter(
+    *,
+    chapter_module_path: str,
+    template_docx: UploadFile | None,
+    project_parts_zip: UploadFile | None,
+    collection_name: str | None,
+    max_workers: int | None,
+    table_placeholders: UploadFile | None = None,
+    result_filename: str = "result.zip",
+):
+    if template_docx:
+        await validate_docx(template_docx)
+
+    if table_placeholders:
+        await validate_json(table_placeholders)
+
+    if project_parts_zip:
+        await validate_zip(project_parts_zip)
+
+    with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
+        tmp_dir = Path(tmp)
+        input_dir = tmp_dir / "in"
+        output_dir = tmp_dir / "out"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        template_docx_path: Path | None = None
+        if template_docx:
+            template_docx_path = input_dir / "template.docx"
+            template_docx_path.write_bytes(await template_docx.read())
+
+        table_placeholders_path: Path | None = None
+        if table_placeholders:
+            table_placeholders_path = input_dir / "table_placeholders.json"
+            table_placeholders_path.write_bytes(await table_placeholders.read())
+
+        project_parts_dir: Path | None = None
+        if project_parts_zip:
+            project_parts_dir = tmp_dir / "project_parts"
+            project_parts_dir.mkdir(parents=True, exist_ok=True)
+            project_parts_zip_bytes = await project_parts_zip.read()
+            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
+
+        collection_name = collection_name or uuid.uuid4().hex
+
+        logger.info(f"generate {template_docx_path=}")
+        logger.info(f"generate {table_placeholders_path=}")
+        logger.info(f"generate {project_parts_dir=}")
+        logger.info(f"generate {output_dir=}")
+        logger.info(f"generate {collection_name=}")
+        logger.info(f"generate {max_workers=}")
+
+        run_main(
+            template_docx_path=template_docx_path,
+            project_parts_path=project_parts_dir,
+            table_placeholders_path=table_placeholders_path,
+            output_path=output_dir,
+            chapter_module_path=chapter_module_path,
+            collection_name=collection_name,
+            verbose=False,
+            test_mode="off",
+            max_workers=max_workers,
+        )
+
+        zip_buf = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for file_path in output_dir.rglob("*"):
+                if file_path.is_file():
+                    arc_name = file_path.relative_to(output_dir)
+                    zf.write(file_path, arcname=arc_name)
+
+        zip_buf.seek(0)
+
+        return StreamingResponse(
+            zip_buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={result_filename}"},
+        )
 
 
 @app.post(
@@ -182,65 +266,42 @@ async def chapter1(
         8, description="Число потоков для параллельного запуска моделей"
     ),
 ):
-    chapter_module_path = "src.ecology_chapters.chapter1"
-    
-    if template_docx:
-        await validate_docx(template_docx)
+    return await _generate_chapter(
+        chapter_module_path="src.ecology_chapters.chapter1",
+        template_docx=template_docx,
+        project_parts_zip=project_parts_zip,
+        collection_name=collection_name,
+        max_workers=max_workers,
+        result_filename="result2.zip",
+    )
 
-    if project_parts_zip:
-        await validate_zip(project_parts_zip)
 
-    with tempfile.TemporaryDirectory(prefix="nc_ecology2_") as tmp:
-        tmp_dir = Path(tmp)
-        input_dir = tmp_dir / "in"
-        output_dir = tmp_dir / "out"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        template_docx_path: Path | None = None
-        if template_docx:
-            template_docx_path = input_dir / "template.docx"
-            template_docx_path.write_bytes(await template_docx.read())
-
-        project_parts_dir: Path | None = None
-        if project_parts_zip:
-            project_parts_dir = tmp_dir / "project_parts"
-            project_parts_dir.mkdir(parents=True, exist_ok=True)
-            project_parts_zip_bytes = await project_parts_zip.read()
-            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
-
-        logger.info(f"generate2 {template_docx_path=}")
-        logger.info(f"generate2 {project_parts_dir=}")
-        logger.info(f"generate2 {output_dir=}")
-        logger.info(f"generate2 {collection_name=}")
-        logger.info(f"generate2 {max_workers=}")
-
-        run_main(
-            template_docx_path=template_docx_path,
-            project_parts_path=project_parts_dir,
-            output_path=output_dir,
-            chapter_module_path=chapter_module_path,
-            collection_name=collection_name,
-            verbose=False,
-            test_mode="off",
-            max_workers=max_workers,
-        )
-
-        zip_buf = io.BytesIO()
-
-        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for file_path in output_dir.rglob("*"):
-                if file_path.is_file():
-                    arc_name = file_path.relative_to(output_dir)
-                    zf.write(file_path, arcname=arc_name)
-
-        zip_buf.seek(0)
-
-        return StreamingResponse(
-            zip_buf,
-            media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=result2.zip"},
-        )
+@app.post(
+    "/chapter2",
+    summary="Глава 2. ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ",
+    description="Эндпоинт используется для генерации главы 'ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ'",
+    tags=["Generation"],
+)
+async def chapter2(
+    template_docx: UploadFile | None = File(
+        None, description="DOCX шаблон для сборки (опционально)"
+    ),
+    project_parts_zip: UploadFile | None = File(
+        None, description="Zip-архив с PDF смежных разделов (опционально)"
+    ),
+    collection_name: str = Form(uuid.uuid4().hex),
+    max_workers: int | None = Form(
+        8, description="Число потоков для параллельного запуска моделей"
+    ),
+):
+    return await _generate_chapter(
+        chapter_module_path="src.ecology_chapters.chapter2",
+        template_docx=template_docx,
+        project_parts_zip=project_parts_zip,
+        collection_name=collection_name,
+        max_workers=max_workers,
+        result_filename="chapter2.zip",
+    )
 
 
 if __name__ == "__main__":
