@@ -3,9 +3,11 @@ import torch
 import pathlib
 from pathlib import Path
 from typing import Literal
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.utils.logger import logger
+
 
 warnings.filterwarnings(
     "ignore",
@@ -44,14 +46,14 @@ rerankers_list = {
 
 
 class Config(BaseSettings):
-    HF_TOKEN: str
-    AI_TUNNEL_API_KEY: str
+    HF_TOKEN: SecretStr
+    AI_TUNNEL_API_KEY: SecretStr
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
+    
     MODEL_NAME: str = models["gpt54mini"]
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
@@ -61,7 +63,7 @@ class Config(BaseSettings):
     RERANKER_MODEL: str = "rerank-4-pro"
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
-
+    
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
         "1": "ПЗ",
         "2": "ПЗУ",
@@ -104,7 +106,4 @@ def build_runtime_config(test_mode: TestMode) -> Config:
 
 
 logger.info("\n\n\n\n\n---START----\n\n\n\n\n")
-logger.info(cfg)
-
-if __name__ == "__main__":
-    print(cfg)
+logger.info('\n'.join(["\n"] + [f"{k}={v}" for k, v in cfg.model_dump().items()]))
