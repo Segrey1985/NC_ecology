@@ -86,6 +86,10 @@ def rerank_with_api(
         logger.error(f"{response.status_code}: {response.text}")
         return []
     
+    if not response.json().get("results"):
+        logger.error(f"[reranker] Отсутствует ключ 'results': {response}")
+        return []
+    
     reranked = [
         (x["document"]["text"], x["relevance_score"])
         for x in response.json()["results"]
