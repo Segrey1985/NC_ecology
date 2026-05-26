@@ -10,7 +10,7 @@ def test_main_base():
     base = Path(__file__).parents[2]
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_dir = Path(tmp_dir) / "project1"
-        input_dir = base / "data" / "IN" / "project1" / "schemas" / "0_Аннотация_и_Введение"
+        input_dir = base / "src" / "ecology_chapters" / "chapter0"
         main(
             template_docx_path=input_dir / "template.docx",
             placeholders_path=input_dir / "placeholders.json",
@@ -35,7 +35,7 @@ def test_main_base_create_new_uuid_collection_and_delete():
         collection_name = uuid.uuid4().hex
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_dir = Path(tmp_dir) / "project1"
-            input_dir = base / "data" / "IN" / "project1" /"schemas" / "0_Аннотация_и_Введение"
+            input_dir = base / "src" / "ecology_chapters" / "chapter0"
             main(
                 template_docx_path=input_dir / "template.docx",
                 placeholders_path=input_dir / "placeholders.json",

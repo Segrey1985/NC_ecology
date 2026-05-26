@@ -1,10 +1,10 @@
 import io
-import json
 import uuid
 import tempfile
 import shutil
 import zipfile
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -42,6 +42,133 @@ def _extract_project_parts_pdfs(
         shutil.copy2(pdf_path, dest)
 
 
+def _zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
+    zip_buf = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for file_path in output_dir.rglob("*"):
+            if file_path.is_file():
+                arc_name = file_path.relative_to(output_dir)
+                zf.write(file_path, arcname=arc_name)
+
+    zip_buf.seek(0)
+
+    return StreamingResponse(
+        zip_buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={result_filename}"},
+    )
+
+
+async def _generate_chapter(
+    *,
+    pipeline: Literal["base", "chapter"],
+    template_docx: UploadFile | None,
+    project_parts_zip: UploadFile | None,
+    collection_name: str | None,
+    chapter_module_path: str | None = None,
+    placeholders: UploadFile | None = None,
+    max_workers: int | None = None,
+    table_placeholders: UploadFile | None = None,
+    result_filename: str = "result.zip",
+):
+    
+    # валидация входных документов
+    
+    if pipeline == "base":
+        if placeholders is None or template_docx is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Для pipeline='base' требуются placeholders и template_docx",
+            )
+        await validate_json(placeholders)
+        await validate_docx(template_docx)
+    else:
+        if chapter_module_path is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Для pipeline='chapter' требуется chapter_module_path",
+            )
+        if template_docx:
+            await validate_docx(template_docx)
+
+    if table_placeholders:
+        await validate_json(table_placeholders)
+
+    if project_parts_zip:
+        await validate_zip(project_parts_zip)
+
+    # создание временной папки
+    
+    with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
+        tmp_dir = Path(tmp)
+        input_dir = tmp_dir / "in"
+        output_dir = tmp_dir / "out"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # запись входных документов во временную папку
+
+        placeholders_path: Path | None = None
+        if pipeline == "base":
+            placeholders_path = input_dir / "placeholders.json"
+            placeholders_path.write_bytes(await placeholders.read())
+
+        template_docx_path: Path | None = None
+        if template_docx:
+            template_docx_path = input_dir / "template.docx"
+            template_docx_path.write_bytes(await template_docx.read())
+
+        table_placeholders_path: Path | None = None
+        if table_placeholders:
+            table_placeholders_path = input_dir / "table_placeholders.json"
+            table_placeholders_path.write_bytes(await table_placeholders.read())
+
+        project_parts_dir: Path | None = None
+        if project_parts_zip:
+            project_parts_dir = tmp_dir / "project_parts"
+            project_parts_dir.mkdir(parents=True, exist_ok=True)
+            project_parts_zip_bytes = await project_parts_zip.read()
+            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
+
+        collection_name = collection_name or uuid.uuid4().hex
+
+        logger.info(f"{pipeline=} {template_docx_path=}")
+        logger.info(f"{placeholders_path=}")
+        logger.info(f"{table_placeholders_path=}")
+        logger.info(f"{project_parts_dir=}")
+        logger.info(f"{output_dir=}")
+        logger.info(f"{collection_name=}")
+        logger.info(f"{chapter_module_path=}")
+        logger.info(f"{max_workers=}")
+
+        if pipeline == "base":
+            run_main_base(
+                template_docx_path=template_docx_path,
+                placeholders_path=placeholders_path,
+                table_placeholders_path=table_placeholders_path,
+                project_parts_path=project_parts_dir,
+                output_path=output_dir,
+                collection_name=collection_name,
+                verbose=False,
+                test_mode="off",
+            )
+        else:
+            run_main(
+                template_docx_path=template_docx_path,
+                project_parts_path=project_parts_dir,
+                table_placeholders_path=table_placeholders_path,
+                output_path=output_dir,
+                chapter_module_path=chapter_module_path,
+                collection_name=collection_name,
+                verbose=False,
+                test_mode="off",
+                max_workers=max_workers,
+            )
+
+        return _zip_output_dir(output_dir, result_filename)
+
+
 @app.get(
     "/health",
     summary="Проверка состояния сервиса",
@@ -73,181 +200,15 @@ async def chapter0(
     ),
     collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
-
-    # проверка типов приложенных файлов
-
-    await validate_json(placeholders)
-
-    if table_placeholders:
-        await validate_json(table_placeholders)
-
-    await validate_docx(template_docx)
-
-    if project_parts_zip:
-        await validate_zip(project_parts_zip)
-
-    with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
-        tmp_dir = Path(tmp)
-        input_dir = tmp_dir / "in"
-        output_dir = tmp_dir / "out"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        placeholders_path = input_dir / "placeholders.json"
-        placeholders_bytes = await placeholders.read()
-        try:
-            json.loads(placeholders_bytes.decode("utf-8"))
-        except Exception as e:
-            raise HTTPException(
-                status_code=400, detail=f"Некорректный JSON: {e}"
-            ) from e
-        placeholders_path.write_bytes(placeholders_bytes)
-
-        table_placeholders_path: Path | None = None
-        if table_placeholders:
-            table_placeholders_path = input_dir / "table_placeholders.json"
-            table_bytes = await table_placeholders.read()
-            try:
-                json.loads(table_bytes.decode("utf-8"))
-            except Exception as e:
-                raise HTTPException(
-                    status_code=400, detail=f"Некорректный JSON: {e}"
-                ) from e
-            table_placeholders_path.write_bytes(table_bytes)
-
-        template_docx_path: Path | None = None
-        if template_docx:
-            template_docx_path = input_dir / "template.docx"
-            template_docx_path.write_bytes(await template_docx.read())
-
-        project_parts_dir: Path | None = None
-        if project_parts_zip:
-            project_parts_dir = tmp_dir / "project_parts"
-            project_parts_dir.mkdir(parents=True, exist_ok=True)
-            # Распаковываем project_parts_zip и собираем PDFs в директорию,
-            # которую ожидает collect_project_parts (она смотрит только верхний уровень).
-            project_parts_zip_bytes = await project_parts_zip.read()
-            await project_parts_zip.seek(0)
-            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
-
-        logger.info(f"{template_docx_path=}")
-        logger.info(f"{placeholders_path=}")
-        logger.info(f"{table_placeholders_path=}")
-        logger.info(f"{project_parts_dir=}")
-        logger.info(f"{output_dir=}")
-        logger.info(f"{collection_name=}")
-
-        run_main_base(
-            template_docx_path=template_docx_path,
-            placeholders_path=placeholders_path,
-            table_placeholders_path=table_placeholders_path,
-            project_parts_path=project_parts_dir,
-            output_path=output_dir,
-            collection_name=collection_name,
-            verbose=False,
-            test_mode="off",
-        )
-
-        zip_buf = io.BytesIO()
-
-        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for file_path in output_dir.rglob("*"):
-                if file_path.is_file():
-                    # сохраняем относительный путь внутри архива
-                    arc_name = file_path.relative_to(output_dir)
-                    zf.write(file_path, arcname=arc_name)
-
-        zip_buf.seek(0)
-
-        return StreamingResponse(
-            zip_buf,
-            media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=result.zip"},
-        )
-
-
-# -------------------------------------------- chapters 1, 2, ... --------------------------------------------
-
-
-async def _generate_chapter(
-    *,
-    chapter_module_path: str,
-    template_docx: UploadFile | None,
-    project_parts_zip: UploadFile | None,
-    collection_name: str | None,
-    max_workers: int | None,
-    table_placeholders: UploadFile | None = None,
-    result_filename: str = "result.zip",
-):
-    if template_docx:
-        await validate_docx(template_docx)
-
-    if table_placeholders:
-        await validate_json(table_placeholders)
-
-    if project_parts_zip:
-        await validate_zip(project_parts_zip)
-
-    with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
-        tmp_dir = Path(tmp)
-        input_dir = tmp_dir / "in"
-        output_dir = tmp_dir / "out"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        template_docx_path: Path | None = None
-        if template_docx:
-            template_docx_path = input_dir / "template.docx"
-            template_docx_path.write_bytes(await template_docx.read())
-
-        table_placeholders_path: Path | None = None
-        if table_placeholders:
-            table_placeholders_path = input_dir / "table_placeholders.json"
-            table_placeholders_path.write_bytes(await table_placeholders.read())
-
-        project_parts_dir: Path | None = None
-        if project_parts_zip:
-            project_parts_dir = tmp_dir / "project_parts"
-            project_parts_dir.mkdir(parents=True, exist_ok=True)
-            project_parts_zip_bytes = await project_parts_zip.read()
-            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
-
-        collection_name = collection_name or uuid.uuid4().hex
-
-        logger.info(f"generate {template_docx_path=}")
-        logger.info(f"generate {table_placeholders_path=}")
-        logger.info(f"generate {project_parts_dir=}")
-        logger.info(f"generate {output_dir=}")
-        logger.info(f"generate {collection_name=}")
-        logger.info(f"generate {max_workers=}")
-
-        run_main(
-            template_docx_path=template_docx_path,
-            project_parts_path=project_parts_dir,
-            table_placeholders_path=table_placeholders_path,
-            output_path=output_dir,
-            chapter_module_path=chapter_module_path,
-            collection_name=collection_name,
-            verbose=False,
-            test_mode="off",
-            max_workers=max_workers,
-        )
-
-        zip_buf = io.BytesIO()
-
-        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for file_path in output_dir.rglob("*"):
-                if file_path.is_file():
-                    arc_name = file_path.relative_to(output_dir)
-                    zf.write(file_path, arcname=arc_name)
-
-        zip_buf.seek(0)
-
-        return StreamingResponse(
-            zip_buf,
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={result_filename}"},
-        )
+    return await _generate_chapter(
+        pipeline="base",
+        placeholders=placeholders,
+        template_docx=template_docx,
+        table_placeholders=table_placeholders,
+        project_parts_zip=project_parts_zip,
+        collection_name=collection_name,
+        result_filename="result.zip",
+    )
 
 
 @app.post(
@@ -269,6 +230,7 @@ async def chapter1(
     collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
     return await _generate_chapter(
+        pipeline="chapter",
         chapter_module_path="src.ecology_chapters.chapter1",
         template_docx=template_docx,
         project_parts_zip=project_parts_zip,
@@ -297,6 +259,7 @@ async def chapter2(
     collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
     return await _generate_chapter(
+        pipeline="chapter",
         chapter_module_path="src.ecology_chapters.chapter2",
         template_docx=template_docx,
         project_parts_zip=project_parts_zip,
