@@ -54,9 +54,9 @@ def health():
 
 @app.post(
     "/chapter0",
-    summary = "Аннотация и введение",
-    description = "Эндпоинт используется для генерации глав 'Аннотация' и 'Введение'",
-    tags = ["Generation"],
+    summary="Аннотация и введение",
+    description="Эндпоинт используется для генерации глав 'Аннотация' и 'Введение'",
+    tags=["Generation"],
 )
 async def chapter0(
     placeholders: UploadFile = File(..., description="JSON с плейсхолдерами"),
@@ -115,7 +115,7 @@ async def chapter0(
         if template_docx:
             template_docx_path = input_dir / "template.docx"
             template_docx_path.write_bytes(await template_docx.read())
-        
+
         project_parts_dir: Path | None = None
         if project_parts_zip:
             project_parts_dir = tmp_dir / "project_parts"
@@ -125,14 +125,14 @@ async def chapter0(
             project_parts_zip_bytes = await project_parts_zip.read()
             await project_parts_zip.seek(0)
             _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
-        
+
         logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
         logger.info(f"{table_placeholders_path=}")
         logger.info(f"{project_parts_dir=}")
         logger.info(f"{output_dir=}")
         logger.info(f"{collection_name=}")
-        
+
         run_main_base(
             template_docx_path=template_docx_path,
             placeholders_path=placeholders_path,
@@ -141,7 +141,7 @@ async def chapter0(
             output_path=output_dir,
             collection_name=collection_name,
             verbose=False,
-            test_mode='off',
+            test_mode="off",
         )
 
         zip_buf = io.BytesIO()
@@ -160,7 +160,7 @@ async def chapter0(
             media_type="application/zip",
             headers={"Content-Disposition": "attachment; filename=result.zip"},
         )
-    
+
 
 # -------------------------------------------- chapters 1, 2, ... --------------------------------------------
 
@@ -251,10 +251,8 @@ async def _generate_chapter(
     summary="Глава 1. ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ",
     description="Эндпоинт используется для генерации главы 'ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ'",
     tags=["Generation"],
-
 )
 async def chapter1(
-    
     template_docx: UploadFile | None = File(
         None, description="DOCX шаблон для сборки (опционально)"
     ),
