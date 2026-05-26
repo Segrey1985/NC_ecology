@@ -59,15 +59,19 @@ def health():
     tags=["Generation"],
 )
 async def chapter0(
-    placeholders: UploadFile = File(..., description="JSON с плейсхолдерами"),
-    template_docx: UploadFile = File(..., description="DOCX шаблон"),
-    table_placeholders: UploadFile | None = File(
-        None, description="JSON с табличными плейсхолдерами (опционально)"
-    ),
     project_parts_zip: UploadFile | None = File(
-        None, description="Zip-архив с документами смежных разделов в формате pdf"
+        None, description="[обязательно] Zip-архив с документами смежных разделов в формате pdf"
     ),
-    collection_name: str = Form(uuid.uuid4().hex),
+    placeholders: UploadFile = File(
+        ..., description="[для отладки] JSON с плейсхолдерами"
+    ),
+    table_placeholders: UploadFile | None = File(
+        None, description="[для отладки] JSON с табличными плейсхолдерами (опционально)"
+    ),
+    template_docx: UploadFile = File(
+        ..., description="[для отладки] DOCX шаблон"
+    ),
+    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
 
     # проверка типов приложенных файлов
@@ -253,16 +257,16 @@ async def _generate_chapter(
     tags=["Generation"],
 )
 async def chapter1(
-    template_docx: UploadFile | None = File(
-        None, description="DOCX шаблон для сборки (опционально)"
-    ),
     project_parts_zip: UploadFile | None = File(
-        None, description="Zip-архив с PDF смежных разделов (опционально)"
+        None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
-    collection_name: str = Form(uuid.uuid4().hex),
+    template_docx: UploadFile | None = File(
+        None, description="[для отладки] DOCX шаблон для сборки (опционально)"
+    ),
     max_workers: int | None = Form(
-        8, description="Число потоков для параллельного запуска моделей"
+        8, description="[для отладки] Число потоков для параллельного запуска моделей"
     ),
+    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
     return await _generate_chapter(
         chapter_module_path="src.ecology_chapters.chapter1",
@@ -281,16 +285,16 @@ async def chapter1(
     tags=["Generation"],
 )
 async def chapter2(
-    template_docx: UploadFile | None = File(
-        None, description="DOCX шаблон для сборки (опционально)"
-    ),
     project_parts_zip: UploadFile | None = File(
-        None, description="Zip-архив с PDF смежных разделов (опционально)"
+        None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
-    collection_name: str = Form(uuid.uuid4().hex),
+    template_docx: UploadFile | None = File(
+        None, description="[для отладки] DOCX шаблон для сборки (опционально)"
+    ),
     max_workers: int | None = Form(
-        8, description="Число потоков для параллельного запуска моделей"
+        8, description="[для отладки] Число потоков для параллельного запуска моделей"
     ),
+    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
 ):
     return await _generate_chapter(
         chapter_module_path="src.ecology_chapters.chapter2",
