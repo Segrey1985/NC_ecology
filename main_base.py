@@ -6,6 +6,8 @@ from typing import Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent_base import GraphResources, init_graph
+from src.agents.agent_base_aux import init_graph as init_aux_graph
+
 from config.langfuse_client import langfuse_config
 from config.config_file import build_runtime_config
 from src.utils.logger import logger
@@ -98,6 +100,36 @@ def thread_run_graph_for_placeholder(
         logger.remove(handler_id)
 
 
+def add_auxiliary_placeholders(placeholders_chapter_0: dict, table_placeholders: dict, runtime_cfg):
+    """Добавляет дополнительные плейсхолдеры после получения базовых сведений о проекте"""
+    
+    aux_graph, aux_resources = init_aux_graph(runtime_cfg=runtime_cfg)
+    
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config.update(langfuse_config)
+    result = aux_graph.invoke(
+        input={
+            "chapter_0": json.dumps(placeholders_chapter_0, ensure_ascii=False),
+            "table_placeholders": table_placeholders
+        },
+        config=config,
+    )
+    
+    aux_answer: dict = json.loads(result['answer'])
+    main_answer: dict = placeholders_chapter_0
+    
+    # проверка на отсутствие одинаковых ключей
+    aux_answer_set = set(aux_answer.keys())
+    main_answer_set = set(main_answer.keys())
+    similar_keys = aux_answer_set.intersection(main_answer_set)
+    
+    if len(similar_keys) != 0:
+        raise AssertionError(
+            f"Требуется устранить одинаковые ключи в agent_base и agent_base_aux: {similar_keys}")
+    
+    placeholders_chapter_0.update(aux_answer)
+
+
 def main(
     template_docx_path: Path | None,
     placeholders_path: Path,
@@ -166,6 +198,12 @@ def main(
                 for line in log_lines:
                     print(line)
                 print("--- конец логов потока ---\n")
+            
+            add_auxiliary_placeholders(
+                placeholders_chapter_0=placeholders_output,
+                table_placeholders=table_placeholders,
+                runtime_cfg=runtime_cfg
+            )
     
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)

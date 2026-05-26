@@ -25,6 +25,9 @@ class AgentState(TypedDict):
     # строка в формате словаря
     chapter_0: str
     
+    # словарь табличных данных, чтобы исключить эти ключи
+    table_placeholders: dict
+    
     # ответ
     answer: str
 
@@ -39,8 +42,11 @@ class GraphResources:
 # --- tools ---
 
 
-def _build_agent_prompt(chapter_0: str):
-    return "\n\n".join(f"KEY: {k}\nVALUE: {v}" for k, v in json.loads(chapter_0).items())
+def _build_agent_prompt(chapter_0: str, table_placeholders: dict):
+    return "\n\n".join(
+        f"{k}:\n{v}" for k, v in json.loads(chapter_0).items()
+        if k not in table_placeholders
+    )
 
 
 # --- nodes ---
@@ -53,17 +59,17 @@ def aux_node(state: AgentState, resources: GraphResources) -> AgentState:
     
     # state
     chapter_0: str = state.get("chapter_0", "")
+    table_placeholders: dict = state.get("table_placeholders", {})
     
     # code
     system_prompt = (
-        "На основе извлеченной структуры данных по проекту, "
-        "извлеки дополнительные поля."
+        "На основе предоставленных структурированных данных по проектной документации извлеки дополнительные поля."
     )
-    human_prompt: str = _build_agent_prompt(chapter_0)
+    human_prompt: str = _build_agent_prompt(chapter_0, table_placeholders)
     
     messages = [SystemMessage(system_prompt), HumanMessage(human_prompt)]
     response = llm.with_structured_output(AuxSchema, strict=True).invoke(messages)
-    print()
+    logger.debug(f"[aux_node] {response}")
     return {"answer": response.model_dump_json()}
     
 
