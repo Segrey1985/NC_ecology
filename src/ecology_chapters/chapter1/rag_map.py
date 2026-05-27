@@ -2,8 +2,6 @@ from __future__ import annotations
 from typing import Type
 from pydantic import BaseModel
 
-from config.config_file import cfg
-
 from .models import (
     Architecture,
     Boilers,
@@ -52,18 +50,3 @@ for key in MODEL_TO_PART_NAMES:
 
 assert len(iter_models_from_module("src.ecology_chapters.chapter1.models")) == len(
     MODEL_TO_PART_NAMES), "chapter1 некорректное кол-во моделей"
-
-
-def get_part_names_for_model(model: Type[BaseModel] | None) -> list[str] | None:
-    """
-    Возвращает список `part_name` для фильтрации поиска в Qdrant по конкретной модели.
-
-    - Если `model` отсутствует или для неё нет записи — возвращаем None (поиск по всем разделам).
-    - Если список пустой — тоже возвращаем None (поиск по всем), чтобы не получать "пустой" результат.
-    """
-    if model is None:
-        return None
-    part_names = MODEL_TO_PART_NAMES.get(model)
-    if not part_names:
-        return None
-    return part_names

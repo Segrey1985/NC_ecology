@@ -1,8 +1,4 @@
-[
-  {
-    "key": "SANITARY_ZONE_SIZE_M",
-    "value": 100,
-    "description": "Размер санитарно-защитной зоны в метрах"
-  }
-]
+{
+	"SANITARY_ZONE_SIZE_M": 100
+}
 

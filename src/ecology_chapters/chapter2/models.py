@@ -320,3 +320,10 @@ class LandPlot(BaseModel):
         ...,
         description="Площадь земельного участка в кв.м",
     )
+
+#
+# if __name__ == "__main__":
+#     from src.utils.utils import iter_models_from_module
+#
+#     for x in iter_models_from_module("src.ecology_chapters.chapter2.models"):
+#         print(x.__name__)
