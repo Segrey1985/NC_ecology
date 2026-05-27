@@ -183,7 +183,7 @@ class ProjectPart:
 
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
-        self.chunks: Optional[list[str]] = None
+        self.chunk_pairs: list[dict] = []
 
     def extract_text(self) -> str:
         texts_by_page = extract_text_with_miner_coords(self.file_path)
@@ -192,29 +192,60 @@ class ProjectPart:
     def make_chunks(
         self,
         text: str | None = None,
-        chunk_size=750,
-        chunk_overlap=150,
+        child_size=600,
+        child_overlap=150,
+        parent_size=3000,
+        parent_overlap=500,
     ) -> None:
+
         text = text or self.extract_text()
         if not text:
             raise ValueError("Can't make chunks: extracted text is empty")
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
+            
+        # 1. Сплиттер для Родительских чанков
+        parent_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=parent_size,
+            chunk_overlap=parent_overlap,
             is_separator_regex=True,
-            # Используем Lookahead: (?=[А-ЯЁA-Z])
-            # "найти точку с пробелом, если за ними идет заглавная буква"
             separators=["\n\n", r"[\.\:\;] (?=[А-ЯЁA-Z])", "\n", " ", ""],
             keep_separator="end",
         )
-        chunks = text_splitter.split_text(text)
-        # пропускаем пустые и очень короткие чанки
-        filtered_chunks = list(filter(lambda x: x and len(x.strip()) > 20, chunks))
-        self.chunks = filtered_chunks
-
+        
+        # 2. Сплиттер для Дочерних чанков
+        child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=child_size,
+            chunk_overlap=child_overlap,
+            is_separator_regex=True,
+            separators=["\n\n", r"[\.\:\;] (?=[А-ЯЁA-Z])", "\n", " ", ""],
+            keep_separator="end",
+        )
+        
+        parent_chunks = parent_splitter.split_text(text)
+        self.chunk_pairs = []
+        
+        # 3. Двухуровневое разделение
+        for p_text in parent_chunks:
+            if not p_text or len(p_text.strip()) <= 20:
+                continue
+                
+            # Генерируем уникальный ID для родительского чанка
+            parent_id = str(uuid.uuid4())
+            
+            # Делим текущего родителя на детей
+            child_chunks = child_splitter.split_text(p_text)
+            
+            for c_text in child_chunks:
+                if c_text and len(c_text.strip()) > 20:
+                    self.chunk_pairs.append({
+                        "child_text": c_text,
+                        "parent_text": p_text,
+                        "parent_id": parent_id
+                    })
+    
+    
     def __repr__(self):
         return json.dumps(
-            {"file": self.file_path.as_posix(), "chunks": self.chunks},
+            {"file": self.file_path.as_posix(), "chunks_count": len(self.chunk_pairs)},
             ensure_ascii=False,
         )
 
@@ -277,11 +308,13 @@ def fill_collection(
 if __name__ == "__main__":
 
     pp = ProjectPart(
-        file_path=cfg.BASE_DIR / "data" / "IN" / "project1" / "1_ОК.17.24СТ-ПЗ.pdf"
+        file_path=cfg.BASE_DIR / "data" / "IN" / "project1" / "trim" /"1_ОК.17.24СТ-ПЗ.pdf"
     )
     print(pp)
     pp.make_chunks()
 
-    for chunk in pp.chunks:
-        print(chunk)
-        print(f"---------------  {len(chunk)}  ---------------")
+    for chunk in pp.chunk_pairs:
+        print(f"{chunk["child_text"]=}")
+        print(f"{chunk["parent_text"]=}")
+        print(f"{chunk["parent_id"]=}")
+        print(f"------------------------------")
