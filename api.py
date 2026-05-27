@@ -133,14 +133,15 @@ async def _generate_chapter(
 
         collection_name = collection_name or uuid.uuid4().hex
 
-        logger.info(f"{pipeline=} {template_docx_path=}")
+        logger.info(f"{pipeline=}")
+        logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
         logger.info(f"{table_placeholders_path=}")
         logger.info(f"{project_parts_dir=}")
-        logger.info(f"{output_dir=}")
         logger.info(f"{collection_name=}")
         logger.info(f"{chapter_module_path=}")
         logger.info(f"{max_workers=}")
+        logger.info(f"{output_dir=}")
 
         if pipeline == "base":
             run_main_base(
@@ -190,15 +191,15 @@ async def chapter0(
         None, description="[обязательно] Zip-архив с документами смежных разделов в формате pdf"
     ),
     placeholders: UploadFile = File(
-        ..., description="[для отладки] JSON с плейсхолдерами"
+        ..., description="[### для отладки ###] JSON с плейсхолдерами"
     ),
     table_placeholders: UploadFile | None = File(
-        None, description="[для отладки] JSON с табличными плейсхолдерами (опционально)"
+        None, description="[### для отладки ###] JSON с табличными плейсхолдерами (опционально)"
     ),
     template_docx: UploadFile = File(
-        ..., description="[для отладки] DOCX шаблон"
+        ..., description="[### для отладки ###] DOCX шаблон"
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
+    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
 ):
     return await _generate_chapter(
         pipeline="base",
@@ -221,18 +222,22 @@ async def chapter1(
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
+    table_placeholders: UploadFile | None = File(
+        None, description="[опционально] JSON с табличными плейсхолдерами"
+    ),
     template_docx: UploadFile | None = File(
-        None, description="[для отладки] DOCX шаблон для сборки (опционально)"
+        None, description="[### для отладки ###] DOCX шаблон для сборки (опционально)"
     ),
     max_workers: int | None = Form(
-        8, description="[для отладки] Число потоков для параллельного запуска моделей"
+        8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
+    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
 ):
     return await _generate_chapter(
         pipeline="chapter",
         chapter_module_path="src.ecology_chapters.chapter1",
         template_docx=template_docx,
+        table_placeholders=table_placeholders,
         project_parts_zip=project_parts_zip,
         collection_name=collection_name,
         max_workers=max_workers,
@@ -250,18 +255,22 @@ async def chapter2(
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
+    table_placeholders: UploadFile | None = File(
+        None, description="[опционально] JSON с табличными плейсхолдерами"
+    ),
     template_docx: UploadFile | None = File(
-        None, description="[для отладки] DOCX шаблон для сборки (опционально)"
+        None, description="[### для отладки ###] DOCX шаблон для сборки (опционально)"
     ),
     max_workers: int | None = Form(
-        8, description="[для отладки] Число потоков для параллельного запуска моделей"
+        8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[для отладки] Имя коллекции"),
+    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
 ):
     return await _generate_chapter(
         pipeline="chapter",
         chapter_module_path="src.ecology_chapters.chapter2",
         template_docx=template_docx,
+        table_placeholders=table_placeholders,
         project_parts_zip=project_parts_zip,
         collection_name=collection_name,
         max_workers=max_workers,

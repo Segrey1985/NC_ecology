@@ -111,7 +111,7 @@ def main(
 ):
     resources: GraphResources | None = None
     try:
-        
+        chapter_name = chapter_module_path.split('.')[-1]
         runtime_cfg = build_runtime_config(test_mode)
         
         # init graph
@@ -125,7 +125,7 @@ def main(
         if test_mode == "mock":
             results = json.load(
                 open(
-                    "data/mock/chapter1_models_output.json",
+                    f"data/mock/{chapter_name}.json",
                     encoding="utf-8",
                 )
             )
@@ -187,34 +187,35 @@ def main(
 
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-
-            results_out_path = output_path / "chapter1_models_output.json"
-            with open(results_out_path, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
-
-            if template_docx_path:
-                assembly_module_path = chapter_module_path + ".assembly"
-                assembly_model = pick_assembly_model(assembly_module_path)
             
-                if test_mode == "filter":
-                    data = filter_mode_payload_and_validate(assembly_model, results)
-                    data_dict = filter_mode_assembly_to_docx_context(
-                        assembly_model,
-                        data,
-                        preserve_unfilled=True,
-                    )
-                else:
-                    data = assembly_model.model_validate(results)
-                    data_dict = data.model_dump(mode="json")
+            assembly_module_path = chapter_module_path + ".assembly"
+            assembly_model = pick_assembly_model(assembly_module_path)
+        
+            if test_mode == "filter":
+                data = filter_mode_payload_and_validate(assembly_model, results)
+                data_dict = filter_mode_assembly_to_docx_context(
+                    assembly_model,
+                    data,
+                    preserve_unfilled=True,
+                )
+            else:
+                data = assembly_model.model_validate(results)
+                data_dict = data.model_dump(mode="json")
+            
+            if table_placeholders_path:
+                try:
+                    with open(table_placeholders_path, "r", encoding="utf-8") as f:
+                        table_placeholders: dict = json.load(f)
+                        logger.info(f"Плейсхолдеры дополнены из {table_placeholders_path}:\n{list(table_placeholders)}")
+                        data_dict.update(table_placeholders)
+                except Exception:
+                    logger.error(traceback.format_exc())
+                    
+            results_out_path = output_path / f"{chapter_name}_output.json"
+            with open(results_out_path, "w", encoding="utf-8") as f:
+                json.dump(data_dict, f, ensure_ascii=False, indent=2)
                 
-                if table_placeholders_path:
-                    try:
-                        with open(table_placeholders_path, "r", encoding="utf-8") as f:
-                            table_placeholders: dict = json.load(f)
-                            data_dict.update(table_placeholders)
-                    except Exception:
-                        logger.error(traceback.format_exc())
-                
+            if template_docx_path:
                 result_template_out_path = (
                     output_path / f"{chapter_module_path.split('.')[-1]}.docx"
                 )
@@ -243,10 +244,10 @@ if __name__ == "__main__":
     main(
         template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
         project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\chapter2"),
-        table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\schemas\chapter2\table_placeholders.json"),
+        table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\src\ecology_chapters\chapter2\__test_table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter2",
         collection_name="all",
-        test_mode="filter",
+        test_mode="mock",
         max_workers=8,
     )
