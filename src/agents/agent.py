@@ -28,7 +28,7 @@ from src.retrieval.reranker_expansion import rerank_with_expanded_queries
 from src.utils.logger import logger
 from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
-from src.ecology_chapters.chapter1.rag_map import get_part_names_for_model
+from src.utils.utils import get_part_names_for_model
 
 
 @dataclass(frozen=True)
@@ -67,6 +67,7 @@ def _rag_search_and_rerank(
     rag_prompts: list[str],
     reranker_prompts: list[str],
     output_model: type[BaseModel] | None,
+    chapter_module_path: str,
 ) -> list[str]:
     
     qdrant_service = resources.qdrant_service
@@ -87,7 +88,7 @@ def _rag_search_and_rerank(
         qdrant_service,
         collection_name,
         limit=50,
-        part_names=get_part_names_for_model(output_model),
+        part_names=get_part_names_for_model(output_model, chapter_module_path),
     )
     merged = merge_retrieval_results(query_points_tuple)
     texts = chunks_to_texts(merged)
@@ -162,6 +163,12 @@ def _get_output_model(config: RunnableConfig) -> type[BaseModel]:
         raise ValueError("RunnableConfig.configurable.output_model не передан.")
     return output_model
 
+
+def _get_chapter_module_path(config: RunnableConfig) -> str:
+    pth = config.get("metadata", {}).get("chapter_module_path")
+    if not pth:
+        raise RuntimeError("В config['metadata'] отсутствует ключ chapter_module_path.")
+    return pth
 
 def generate_retrieval_prompts_node(
     state: Agent2State, resources: GraphResources
@@ -239,7 +246,7 @@ def rag_search_node(
     rag_prompts = state["rag_prompts"]
     reranker_prompts = state["reranker_prompts"]
     chunks = _rag_search_and_rerank(
-        resources, rag_prompts, reranker_prompts, _get_output_model(config)
+        resources, rag_prompts, reranker_prompts, _get_output_model(config), _get_chapter_module_path(config)
     )
     rag_context = format_rag_context(chunks)
     logger.info(

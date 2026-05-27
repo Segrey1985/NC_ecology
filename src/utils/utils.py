@@ -5,7 +5,7 @@ import pypdf
 import pymupdf
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional, get_args, get_origin
+from typing import Any, Optional, get_args, get_origin, Type
 
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.alias_generators import to_pascal
@@ -40,6 +40,26 @@ def pascal_to_snake(name: str) -> str:
     """Facility → facility, NearestObjects → nearest_objects."""
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+
+def get_part_names_for_model(
+    model: Type[BaseModel] | None, chapter_module_path: str,
+) -> list[str] | None:
+    """
+    Возвращает список `part_name` для фильтрации поиска в Qdrant по конкретной модели.
+
+    - Если `model` отсутствует или для неё нет записи — возвращаем None (поиск по всем разделам).
+    - Если список пустой — тоже возвращаем None (поиск по всем), чтобы не получать "пустой" результат.
+    """
+    if model is None:
+        return None
+    
+    module = importlib.import_module(chapter_module_path + ".rag_map")
+    part_names = module.MODEL_TO_PART_NAMES.get(model)
+    if not part_names:
+        return None
+    
+    return part_names
 
 
 # ___ PDF ___

@@ -73,6 +73,7 @@ class Config(BaseSettings):
         return self.AI_TUNNEL_API_KEY.get_secret_value()
     
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
+        "0": "Изыскания",
         "1": "ПЗ",
         "2": "ПЗУ",
         "3": "АР",

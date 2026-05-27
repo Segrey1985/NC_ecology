@@ -30,6 +30,7 @@ def _run_graph(
     graph,
     input_query: str,
     output_model: type[BaseModel],
+    chapter_module_path: str,
     verbose: bool = True,
 ) -> str:
 
@@ -40,6 +41,7 @@ def _run_graph(
         },
         "metadata": {
             "output_model": output_model.__name__,
+            "chapter_module_path": chapter_module_path,
         },
     }
     config.update(langfuse_config)
@@ -77,7 +79,7 @@ def _log_thread():
 
 
 def thread_run_graph_for_model(
-    graph: CompiledStateGraph, model: type[BaseModel], verbose: bool
+    graph: CompiledStateGraph, model: type[BaseModel], chapter_module_path: str, verbose: bool
 ) -> dict:
     handler_id, log_lines = _log_thread()
 
@@ -86,6 +88,7 @@ def thread_run_graph_for_model(
             graph,
             input_query=build_input_query(model),
             output_model=model,
+            chapter_module_path=chapter_module_path,
             verbose=verbose,
         )
         return {
@@ -163,6 +166,7 @@ def main(
                         thread_run_graph_for_model,
                         graph=graph,
                         model=model,
+                        chapter_module_path=chapter_module_path,
                         verbose=verbose,
                     )
                     for model in models
