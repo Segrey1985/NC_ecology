@@ -46,6 +46,7 @@ class QdrantService:
         self.vector_size: int | None = None
 
     def create_collection(self, collection_name: str) -> None:
+        """Создать Qdrant коллекцию"""
         if not self.client.collection_exists(collection_name):
             if self.vector_size is None:
                 try:
@@ -70,11 +71,13 @@ class QdrantService:
     def add_points_to_collection(
         self, collection_name: str, points: list[PointStruct], batch_size=32
     ) -> None:
+        """Добавить в коллекцию список рассчитанных точек PointStruct"""
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
             self.client.upsert(collection_name=collection_name, wait=True, points=batch)
 
     def _calculate_vectors(self, chunks: list[str]) -> list[list[float]]:
+        """Превращает список чанков в список эмбеддингов"""
         if not chunks:
             raise ValueError("Cannot calculate vectors: chunks list is empty")
 
@@ -85,15 +88,25 @@ class QdrantService:
         ]
 
     def _build_payload(self, project_part: "ProjectPart") -> list[dict]:
-        if not project_part.chunks:
+        """Создание payload для всех чанков экземпляра ProjectPart"""
+        if not project_part.chunk_pairs:
             raise ValueError(
-                "Cannot build payload: ProjectPart.chunks list is empty"
+                "Cannot build payload: ProjectPart.chunk_pairs list is empty"
             )
 
         base = self._build_part_payload(project_part.file_path)
-        return [{**base, "text": chunk} for chunk in project_part.chunks]
+        return [
+            {
+                **base,
+                "text": pair["child_text"],
+                "parent_text": pair["parent_text"],
+                "parent_id": pair["parent_id"]
+            }
+            for pair in project_part.chunk_pairs
+        ]
 
     def _build_part_payload(self, file_path: Path) -> dict:
+        """Вспомогательная функция для генерации ключей part_number, part_name"""
         stem = file_path.stem
         part_ = stem.split("_")[0]
         parts_split_by_point = part_.split(".")
@@ -110,9 +123,14 @@ class QdrantService:
         }
 
     def calculate_points(self, project_part: "ProjectPart") -> list[PointStruct]:
-        """Сборная функция. Вычисляет эмбеддинги, добавляет payload, формирует и возвращает список PointStruct."""
+        """
+        Сборная функция.
+        На основе project_part вычисляет эмбеддинги, добавляет payload, формирует и возвращает список PointStruct.
+        """
         logger.debug(f"Calculating points for <{project_part.file_path}> ...")
-        vectors = self._calculate_vectors(project_part.chunks)
+        # Считаем эмбеддинги только по дочерним текстам
+        child_texts = [pair["child_text"] for pair in project_part.chunk_pairs]
+        vectors = self._calculate_vectors(child_texts)
         payload = self._build_payload(project_part)
         return [
             PointStruct(id=uuid.uuid4().hex, vector=vector, payload=payload_item)
@@ -310,11 +328,18 @@ if __name__ == "__main__":
     pp = ProjectPart(
         file_path=cfg.BASE_DIR / "data" / "IN" / "project1" / "trim" /"1_ОК.17.24СТ-ПЗ.pdf"
     )
-    print(pp)
+
     pp.make_chunks()
 
-    for chunk in pp.chunk_pairs:
-        print(f"{chunk["child_text"]=}")
-        print(f"{chunk["parent_text"]=}")
-        print(f"{chunk["parent_id"]=}")
-        print(f"------------------------------")
+    # for chunk in pp.chunk_pairs:
+    #     print(f"{chunk["child_text"]=}")
+    #     print(f"{chunk["parent_text"]=}")
+    #     print(f"{chunk["parent_id"]=}")
+    #     print(f"------------------------------")
+    
+    from config.config_file import cfg
+    
+    qdrant_service = build_qdrant_service(cfg)
+    create_collection(qdrant_service, "parent1")
+    fill_collection(qdrant_service, "parent1", [pp])
+    
