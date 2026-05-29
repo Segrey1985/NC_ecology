@@ -50,7 +50,7 @@ def rerank_with_local_reranker(
     *,
     top_n: int | None = 5,
     batch_size: int = 32,
-) -> list[tuple[str, float]]:
+) -> list[dict]:
 
     if not chunks:
         return []
@@ -64,7 +64,16 @@ def rerank_with_local_reranker(
     order = scores.argsort()[::-1]
     if top_n is not None:
         order = order[:top_n]
-    reranked = [(chunks[i], scores[i]) for i in order]
+    
+    reranked = [
+        {
+            "index": int(i),
+            "text": chunks[i],
+            "score": scores[i]
+        }
+        for i in order
+    ]
+    
     logger.debug(f"[local_reranker] Re-ranking complete.")
 
     return reranked
@@ -72,7 +81,7 @@ def rerank_with_local_reranker(
 
 def rerank_with_api(
     model_name: str, query: str, chunks: list[str], *, top_n: int = 5
-) -> list[tuple[str, float]]:
+) -> list[dict]:
     response = requests.post(
         "https://api.aitunnel.ru/v1/rerank",
         headers={
@@ -86,13 +95,19 @@ def rerank_with_api(
         logger.error(f"{response.status_code}: {response.text}")
         return []
     
-    if not response.json().get("results"):
+    response_json = response.json()
+    
+    if not response_json.get("results"):
         logger.error(f"[reranker] Отсутствует ключ 'results': {response}")
         return []
     
     reranked = [
-        (x["document"]["text"], x["relevance_score"])
-        for x in response.json()["results"]
+        {
+            "index": x["index"],
+            "text": x["document"]["text"],
+            "score": x["relevance_score"]
+        }
+        for x in response_json["results"]
     ]
     logger.debug(f"[api reranker] [{model_name}] Re-ranking complete.")
     return reranked
@@ -100,8 +115,8 @@ def rerank_with_api(
 
 def rerank_chunks(
     query: str, chunks: list[str], reranker_model: str, *, top_n: int = 5
-) -> list[tuple[str, float]]:
-    
+) -> list[dict]:
+    """Делает rerank и возвращает список словарей с информацией о чанках с ключами index, text, score"""
     is_local = rerankers_list[reranker_model]["is_local"]
     if is_local:
         return rerank_with_local_reranker(model_name=reranker_model, query=query, chunks=chunks, top_n=top_n)
@@ -115,11 +130,11 @@ if __name__ == "__main__":
             r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim\2_ОК.17.24СТ-ПЗУ.pdf"
         )
     )
-    project_part.run()
-    chunks = project_part.chunks
+    project_part.make_chunks()
+    chunk_pairs = project_part.chunk_pairs
     
     query = "Наименование объекта строительства"
 
-    reranked = rerank_chunks(query, chunks, reranker_model="qilowoq/bge-reranker-v2-m3-en-ru")
+    reranked = rerank_chunks(query, list(map(lambda x: x["child_text"], chunk_pairs)), reranker_model="rerank-4-pro")
     for r in reranked:
         print(r)

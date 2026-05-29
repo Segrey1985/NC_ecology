@@ -85,7 +85,7 @@ def _build_agent_prompt(
 
 
 def search_in_related_disciplines(query: str, resources: GraphResources) -> list[str]:
-    """Найти релевантные части текста в документах смежных разделов."""
+    """Найти релевантные (родительские) части текста в документах смежных разделов."""
     qdrant_service = resources.qdrant_service
     collection_name = resources.collection_name
     if qdrant_service is None or collection_name is None:
@@ -94,11 +94,19 @@ def search_in_related_disciplines(query: str, resources: GraphResources) -> list
     relevant_points = qdrant_service.run_query(
         query, collection_name=collection_name, limit=50
     )
-    texts = [point.payload["text"] for point in relevant_points]
-    reranked = rerank_chunks(
+    
+    indexes, texts, parent_texts = [], [], []
+    for i, point in enumerate(relevant_points):
+        indexes.append(i)
+        texts.append(point.payload["text"])
+        parent_texts.append(point.payload["parent_text"])
+    
+    reranked_dict = rerank_chunks(
         query, texts, reranker_model=resources.runtime_cfg.RERANKER_MODEL, top_n=5
     )
-    return [chunk for chunk, _score in reranked]
+    reranked_indexes = [chunk_info["index"] for chunk_info in reranked_dict]
+    reranked_parent_texts = [parent_texts[i] for i in reranked_indexes]
+    return reranked_parent_texts
 
 
 # --- Nodes ---
@@ -106,8 +114,8 @@ def search_in_related_disciplines(query: str, resources: GraphResources) -> list
 
 def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
     rag_query = state.get("rag_query") or state["for_rag_search"]
-    chunks = search_in_related_disciplines(rag_query, resources)
-    rag_context = format_rag_context(chunks)
+    parent_texts = search_in_related_disciplines(rag_query, resources)
+    rag_context = format_rag_context(parent_texts)
     logger.info(f"RAG search completed for query: {rag_query}")
     return {
         "rag_query": rag_query,

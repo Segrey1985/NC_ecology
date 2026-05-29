@@ -235,13 +235,13 @@ def main(
 if __name__ == "__main__":
 
     base = Path(__file__).parent
-    input_dir = base / "data" / "IN" / "project1" / "schemas" / "0_Аннотация_и_Введение"
+    input_dir = base / "src" / "ecology_chapters" / "chapter0"
     main(
         template_docx_path=input_dir / "template.docx",
         placeholders_path=input_dir / "placeholders.json",
         table_placeholders_path=input_dir / "table_placeholders.json",
         project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"),
         output_path=base / "data" / "OUT" / "project1",
-        collection_name="main_base_test_off",
+        collection_name="main_base_test_off_parent",
         test_mode="off",
     )
