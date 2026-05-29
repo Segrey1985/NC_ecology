@@ -105,8 +105,13 @@ def search_in_related_disciplines(query: str, resources: GraphResources) -> list
         query, texts, reranker_model=resources.runtime_cfg.RERANKER_MODEL, top_n=5
     )
     reranked_indexes = [chunk_info["index"] for chunk_info in reranked_dict]
-    reranked_parent_texts = [parent_texts[i] for i in reranked_indexes]
-    return reranked_parent_texts
+    
+    # выбираем использовать child_chink или parent_chunk (здесь пока вручную)
+    use_parent = False
+    if use_parent:
+        return [parent_texts[i] for i in reranked_indexes]
+    else:
+        return [texts[i] for i in reranked_indexes]
 
 
 # --- Nodes ---

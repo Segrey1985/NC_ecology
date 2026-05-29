@@ -9,7 +9,7 @@ project_part = ProjectPart(
     )
 )
 project_part.make_chunks()
-chunks = project_part.chunks
+chunks = project_part.make_chunks()
 query = "Наименование объекта строительства"
 
 
