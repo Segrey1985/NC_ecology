@@ -251,7 +251,7 @@ if __name__ == "__main__":
         table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\src\ecology_chapters\chapter2\__test_table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter2",
-        collection_name="all",
-        test_mode="mock",
+        collection_name="ch2_off_parent",
+        test_mode="filter",
         max_workers=8,
     )

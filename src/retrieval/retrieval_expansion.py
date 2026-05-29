@@ -1,18 +1,14 @@
-"""
-RAG-пайплайн с query expansion: multiple retrieval → merge.
+"""Retrieval по нескольким RAG-запросам.
 
-Ожидаемый порядок вызовов (остальные этапы — на стороне вызывающего кода):
-
-    expanded_queries = ...          # Query Expansion
-    per_query = search_by_multi_rag_queries(...)
-    merged = merge_retrieval_results(per_query)
-    texts = chunks_to_texts(merged) # → reranker → context assembly → LLM
+Qdrant ищет по коротким child-текстам (`text`), а LLM должен получать широкий
+контекст (`parent_text`). Этот модуль сохраняет оба текста рядом, чтобы дальше
+не приходилось восстанавливать связь между ними.
 """
 
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from src.retrieval.rank_fusion import MergeStrategy, fuse_ranked_lists
@@ -26,12 +22,12 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class RetrievedChunk:
-    """Элемент после merge"""
+    """Результат retrieval после слияния нескольких запросов."""
 
     text: str
+    parent_text: str
     score: float
-    point_id: str | int | None = None
-    payload: dict = field(default_factory=dict)
+    point_id: str | int
     source_queries: tuple[str, ...] = ()
 
 
@@ -44,18 +40,13 @@ def search_by_multi_rag_queries(
     part_names: list[str] | None = None,
     max_workers: int | None = 4,
 ) -> list[tuple[str, list[ScoredPoint]]]:
+    """Запускает Qdrant-поиск для каждого непустого запроса.
+
+    Возвращает пары ``(query, points)`` в порядке входных непустых запросов.
+    При ошибке отдельного запроса на его месте остаётся пустой список.
     """
-    Запускает параллельный поиск релевантных частей для каждого rag_prompt.
-    
-    :param rag_queries: список rag запросов
-    :param qdrant_service: QdrantService
-    :param collection_name: имя коллекции
-    :param limit: сколько точек должен вернуть каждый rag-поиск
-    :param part_names: где искать релевантные фрагменты
-    :param max_workers: кол-во потоков
-    :return: Список пар (query, points)
-    """
-    if not rag_queries:
+    queries = [query.strip() for query in rag_queries if query and query.strip()]
+    if not queries:
         return []
 
     def _search(query: str) -> list[ScoredPoint]:
@@ -66,18 +57,17 @@ def search_by_multi_rag_queries(
             part_names=part_names,
         )
 
-    workers = max_workers or min(4, len(rag_queries))
-    results: list[tuple[str, list[ScoredPoint]]] = [(q, []) for q in rag_queries]
+    workers = max_workers or min(4, len(queries))
+    results: list[tuple[str, list[ScoredPoint]]] = [(query, []) for query in queries]
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_idx = {
             executor.submit(_search, query): i
-            for i, query in enumerate(rag_queries)
-            if query.strip()
+            for i, query in enumerate(queries)
         }
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
-            query = rag_queries[idx]
+            query = queries[idx]
             try:
                 points = future.result()
             except Exception:
@@ -97,58 +87,54 @@ def merge_retrieval_results(
     strategy: MergeStrategy = "rrf",
     rrf_k: int = 60,
 ) -> list[RetrievedChunk]:
-    """
-    Объединяет результаты нескольких запросов в один ранжированный список.
-    Дубликаты по point.id схлопываются на этапе merge.
-    Стратегии: max_score, sum_score, rrf (см. rank_fusion.fuse_ranked_lists).
-    :param per_query_results: список пар (query, points)
-    :param strategy: стратегия объединения
-    :param rrf_k: параметр стратегии rrf
-    :return: список элементов после merge: [RetrievedChunk(text, score, point_id, payload, source_queries), ...]
-    """
+    """Объединяет результаты нескольких retrieval-запросов в один ранжированный список."""
     if not per_query_results:
         return []
 
-    meta: dict[str | int, dict] = {}
-    ranked_by_key: list[tuple[str, list[tuple[str | int, float]]]] = []
+    chunks_by_id: dict[str | int, RetrievedChunk] = {}
+    chunks_by_query: list[tuple[str, list[RetrievedChunk]]] = []
 
     for query, points in per_query_results:
-        ranked: list[tuple[str | int, float]] = []
+        chunks: list[RetrievedChunk] = []
         for point in points:
-            pid = point.id
-            if pid is None:
+            if point.id is None:
                 continue
-            text = (point.payload or {}).get("text", "")
+
+            payload = point.payload or {}
+            text = str(payload.get("text") or "").strip()
             if not text:
                 continue
-            ranked.append((pid, float(point.score or 0.0)))
-            if pid not in meta:
-                meta[pid] = {
-                    "text": text,
-                    "payload": dict(point.payload or {}),
-                    "point_id": pid,
-                }
-        ranked_by_key.append((query, ranked))
+
+            point_id = point.id
+            chunk = RetrievedChunk(
+                text=text,
+                parent_text=str(payload.get("parent_text") or text).strip(),
+                score=float(point.score or 0.0),
+                point_id=point_id,
+            )
+            chunks.append(chunk)
+            chunks_by_id.setdefault(point_id, chunk)
+        chunks_by_query.append((query, chunks))
 
     fused = fuse_ranked_lists(
-        ranked_by_key,
+        chunks_by_query,
+        key=lambda chunk: chunk.point_id,
+        score=lambda chunk: chunk.score,
         strategy=strategy,
         rrf_k=rrf_k,
     )
 
-    return [
-        RetrievedChunk(
-            text=meta[item.key]["text"],
-            score=item.score,
-            point_id=meta[item.key]["point_id"],
-            payload=meta[item.key]["payload"],
-            source_queries=item.source_queries,
+    merged: list[RetrievedChunk] = []
+    for item in fused:
+        chunk = chunks_by_id.get(item.key)
+        if chunk is None:
+            continue
+        merged.append(
+            replace(chunk, score=item.score, source_queries=item.source_queries)
         )
-        for item in fused
-        if item.key in meta
-    ]
+    return merged
 
 
 def chunks_to_texts(chunks: list[RetrievedChunk]) -> list[str]:
-    """Извлечь text из списка RetrievedChunk"""
+    """Вернуть child-тексты для reranker."""
     return [c.text for c in chunks if c.text]

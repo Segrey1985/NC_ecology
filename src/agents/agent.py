@@ -69,11 +69,11 @@ def _rag_search_and_rerank(
     output_model: type[BaseModel] | None,
     chapter_module_path: str,
 ) -> list[str]:
-    
+
     qdrant_service = resources.qdrant_service
     collection_name = resources.collection_name
     reranker_model = resources.runtime_cfg.RERANKER_MODEL
-    
+
     if qdrant_service is None or collection_name is None:
         raise RuntimeError(
             "Qdrant не инициализирован. Сначала вызовите init_graph_2()."
@@ -94,17 +94,23 @@ def _rag_search_and_rerank(
     texts = chunks_to_texts(merged)
     if not texts:
         return []
-    
-    reranked = rerank_with_expanded_queries(
+
+    ranked_child_chunks = rerank_with_expanded_queries(
         reranker_prompts, texts, reranker_model, top_n=5
     )
-    
-    # fallback
-    if not reranked:
+
+    if not ranked_child_chunks:
         logger.warning("? reranker returned no results ?; fallback to retrieval results")
-        return texts[:5]
-        
-    return [chunk for chunk, _score in reranked]
+        return [chunk.parent_text for chunk in merged[:5]]
+
+    parent_texts: list[str] = []
+    for child_chunk in ranked_child_chunks:
+        index = child_chunk["index"]
+        if 0 <= index < len(merged):
+            parent_texts.append(merged[index].parent_text)
+        else:
+            logger.warning("[agent_2] reranker returned invalid index: %r", child_chunk)
+    return parent_texts
 
 
 class RagPrompt(BaseModel):

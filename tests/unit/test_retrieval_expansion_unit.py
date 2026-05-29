@@ -5,8 +5,12 @@ from types import SimpleNamespace
 import pytest
 
 
-def _point(point_id: str | int, score: float, text: str):
-    return SimpleNamespace(id=point_id, score=score, payload={"text": text})
+def _point(point_id: str | int, score: float, text: str, parent_text: str | None = None):
+    return SimpleNamespace(
+        id=point_id,
+        score=score,
+        payload={"text": text, "parent_text": parent_text or text},
+    )
 
 
 def test_merge_retrieval_results_max_score():
@@ -21,6 +25,7 @@ def test_merge_retrieval_results_max_score():
     assert by_id["p1"] == 0.8
     assert by_id["p2"] == 0.9
     assert {c.text for c in merged} == {"chunk A", "chunk B"}
+    assert {c.parent_text for c in merged} == {"chunk A", "chunk B"}
 
 
 def test_merge_retrieval_results_skips_points_without_text():

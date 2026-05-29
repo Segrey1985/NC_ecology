@@ -17,7 +17,10 @@ def _resources(agent, *, llm=None, qdrant_service=None, collection_name="main", 
 
 
 def _config(output_model: type[BaseModel]):
-    return {"configurable": {"output_model": output_model}}
+    return {
+        "configurable": {"output_model": output_model},
+        "metadata": {"chapter_module_path": "tests.fake_chapter"},
+    }
 
 
 def test_search_in_related_disciplines_requires_init():
@@ -29,6 +32,7 @@ def test_search_in_related_disciplines_requires_init():
             ["q"],
             ["q"],
             output_model=BaseModel,
+            chapter_module_path="tests.fake_chapter",
         )
 
 
@@ -37,7 +41,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
 
     captured: dict[str, object] = {}
 
-    def fake_search(_resources, rp: list[str], rr: list[str], _m):
+    def fake_search(_resources, rp: list[str], rr: list[str], _m, _path: str):
         captured["rag_prompts"] = rp
         captured["reranker_prompts"] = rr
         return ["c1", "c2"]
@@ -177,16 +181,18 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
             class P:
                 id = "p1"
                 score = 0.9
-                payload = {"text": "t1"}
+                payload = {"text": "t1", "parent_text": "parent t1"}
 
             return [P()]
 
     monkeypatch.setattr(
         agent,
         "rerank_with_expanded_queries",
-        lambda _qs, texts, model, **kwargs: [(texts[0], 1.0)],
+        lambda _qs, texts, model, **kwargs: [
+            {"index": 0, "text": texts[0], "score": 1.0}
+        ],
     )
-    monkeypatch.setattr(agent, "get_part_names_for_model", lambda _m: ["АР", "КР"])
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda _m, _path: ["АР", "КР"])
 
     chunks = agent._rag_search_and_rerank(
         _resources(
@@ -198,8 +204,9 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
         ["q1", "q2", "q3"],
         ["rr1", "rr2", "rr3"],
         output_model=Out,
+        chapter_module_path="tests.fake_chapter",
     )
-    assert chunks == ["t1"]
+    assert chunks == ["parent t1"]
     assert captured["part_names"] == ["АР", "КР"]
     assert captured["collection_name"] == "main"
     assert captured["limit"] == 50
