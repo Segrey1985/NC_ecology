@@ -48,7 +48,9 @@ def test_thread_run_graph_for_model_parses_json(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr("main._run_graph", fake_run_graph)
 
-    _results = thread_run_graph_for_model(graph=object(), model=M, verbose=False)
+    _results = thread_run_graph_for_model(
+        graph=object(), model=M, chapter_module_path="tests.fake_chapter", verbose=False
+    )
     assert _results["model_name"] == "M"
     assert _results["result"] == {"x": 1}
 
@@ -84,8 +86,12 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
 
     fake_resources = FakeResources()
 
+    class FakeAssembly(BaseModel):
+        M: str | None = None
+
     monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), fake_resources))
     monkeypatch.setattr("main.iter_models_from_module", lambda _p: [M])
+    monkeypatch.setattr("main.pick_assembly_model", lambda _p: FakeAssembly)
     monkeypatch.setattr(
         "main.thread_run_graph_for_model",
         lambda **_kwargs: {
@@ -110,7 +116,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
         max_workers=1,
     )
 
-    out_json = out_dir / "chapter1_models_output.json"
+    out_json = out_dir / "matter_output.json"
     assert out_json.exists()
     assert out_json.read_text(encoding="utf-8").strip() != ""
     assert "M" in out_json.read_text(encoding="utf-8")
@@ -127,12 +133,16 @@ def test_main_filter_mode_uses_iter_chapter_models(
 
     called = {"filter": False}
 
+    class FakeAssembly(BaseModel):
+        M: dict | None = None
+
     def fake_iter_chapter(_path: str):
         called["filter"] = True
         return [M]
 
     monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), object()))
     monkeypatch.setattr("main.iter_chapter_models", fake_iter_chapter)
+    monkeypatch.setattr("main.pick_assembly_model", lambda _p: FakeAssembly)
     monkeypatch.setattr(
         "main.thread_run_graph_for_model",
         lambda **_kwargs: {

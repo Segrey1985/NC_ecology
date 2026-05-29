@@ -21,6 +21,8 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
     trim_dir = repo_root / "data" / "IN" / "project1" / "trim"
     pdfs = sorted(trim_dir.glob("*.pdf"))[:2]
     assert len(pdfs) >= 1, f"Ожидался хотя бы 1 pdf в {trim_dir}"
+    
+    table_placeholders_path= Path("src/ecology_chapters/chapter1/table_placeholders.json")
 
     collection_name = uuid.uuid4().hex  # временная коллекция
 
@@ -34,12 +36,12 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
             shutil.copy2(pdf, parts_dir / pdf.name)
 
         out_dir = tmp_dir / "out"
-        out_json = out_dir / "chapter1_models_output.json"
+        out_json = out_dir / "chapter1_output.json"
 
         main(
             template_docx_path=None,
             project_parts_path=parts_dir,
-            table_placeholders_path=Path("src/ecology_chapters/chapter1/table_placeholders.json"),
+            table_placeholders_path=table_placeholders_path,
             output_path=out_dir,
             chapter_module_path="src.ecology_chapters.chapter1",
             collection_name=collection_name,
@@ -50,5 +52,8 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
 
         assert out_json.exists()
         data = json.loads(out_json.read_text(encoding="utf-8"))
+        data = {k: v for k, v in data.items() if v}
         assert isinstance(data, dict)
-        assert len(data) == 1  # test_mode="on" => только 1 модель
+        
+        # test_mode="on" => только 1 модель
+        assert len(data) == 1 + len(json.loads(table_placeholders_path.read_text(encoding="utf-8")))

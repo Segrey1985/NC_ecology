@@ -37,7 +37,7 @@ def test_print_points():
     )
     project_part.make_chunks()
     qdrant_service = build_qdrant_service(runtime_cfg=build_runtime_config('on'))
-    points, chunks = qdrant_service.calculate_points(project_part), project_part.chunks
+    points = qdrant_service.calculate_points(project_part)
     for i, x in enumerate(points):
         print(x)
         if i == 2:

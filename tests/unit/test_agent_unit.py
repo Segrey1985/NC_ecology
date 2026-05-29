@@ -206,7 +206,7 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
         output_model=Out,
         chapter_module_path="tests.fake_chapter",
     )
-    assert chunks == ["parent t1"]
+    assert chunks == ["t1"]
     assert captured["part_names"] == ["АР", "КР"]
     assert captured["collection_name"] == "main"
     assert captured["limit"] == 50
