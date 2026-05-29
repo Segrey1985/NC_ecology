@@ -5,4 +5,4 @@ None — все модели из chapter*.models
 
 # ACTIVE_MODEL_NAMES: list[str] | None = None
 
-ACTIVE_MODEL_NAMES = ["Facility", "PhysicalFactors", "Technogenic"]
+ACTIVE_MODEL_NAMES = ["Geology", "Facility", "PhysicalFactors", "Technogenic"]

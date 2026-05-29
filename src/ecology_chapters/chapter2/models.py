@@ -8,6 +8,7 @@ Pydantic-модели данных для генерации Главы 2
 
 from typing import Optional
 from pydantic import BaseModel, Field
+from pydantic import PrivateAttr
 
 from .inner import (
     IGE,
@@ -35,6 +36,7 @@ class Geology(BaseModel):
         None,
         description="Перечень инженерно-геологических элементов (ИГЭ). Должен отражать все перечисленные ИГЭ в разделе 'description'",
     )
+    _use_parent: bool = PrivateAttr(default=True)
 
 
 class Hydrogeology(BaseModel):

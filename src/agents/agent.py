@@ -102,15 +102,23 @@ def _rag_search_and_rerank(
     if not ranked_child_chunks:
         logger.warning("? reranker returned no results ?; fallback to retrieval results")
         return [chunk.parent_text for chunk in merged[:5]]
-
-    parent_texts: list[str] = []
-    for child_chunk in ranked_child_chunks:
-        index = child_chunk["index"]
-        if 0 <= index < len(merged):
-            parent_texts.append(merged[index].parent_text)
-        else:
-            logger.warning("[agent_2] reranker returned invalid index: %r", child_chunk)
-    return parent_texts
+    
+    # выбираем использовать child_chink или parent_chunk
+    
+    use_parent = output_model.__private_attributes__.get("_use_parent", False)
+    if use_parent:
+        logger.info("use parent chunks")
+        parent_texts: list[str] = []
+        for child_chunk in ranked_child_chunks:
+            index = child_chunk["index"]
+            if 0 <= index < len(merged):
+                parent_texts.append(merged[index].parent_text)
+            else:
+                logger.warning("[agent_2] reranker returned invalid index: %r", child_chunk)
+        return parent_texts
+    else:
+        logger.info("use child chunks")
+        return [chunk["text"] for chunk in ranked_child_chunks]
 
 
 class RagPrompt(BaseModel):
