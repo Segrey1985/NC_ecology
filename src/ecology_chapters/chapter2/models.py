@@ -34,8 +34,9 @@ class Geology(BaseModel):
     )
     ige_table: Optional[list[IGE]] = Field(
         None,
-        description="Перечень инженерно-геологических элементов (ИГЭ). Должен отражать все перечисленные ИГЭ в разделе 'description'",
+        description="Перечень инженерно-геологических элементов (ИГЭ). Должен отражать все перечисленные ИГЭ в разделах 'description', 'num_layers'",
     )
+    num_layers_: str = Field(..., description="Количество инженерно-геологических элементов (ИГЭ)")
     _use_parent: bool = PrivateAttr(default=True)
 
 
