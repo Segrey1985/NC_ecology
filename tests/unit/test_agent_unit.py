@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 import pytest
 from pydantic import BaseModel
@@ -436,3 +437,86 @@ def test_init_graph_2_existing_collection_does_not_create(monkeypatch: pytest.Mo
     assert resources.qdrant_service is not None
     assert resources.llm is not None
 
+
+def test_use_parent(monkeypatch: pytest.MonkeyPatch):
+    
+    import src.agents.agent as agent
+    from src.ecology_chapters.chapter2.models import Geology
+    
+    @dataclass
+    class FakeRetrievedChunk:
+        text: str = "dummy"
+        parent_text: str= "parent_text"
+        score: float = 1.0
+        point_id: str | int = 1
+        
+    def fake_search_by_multi_rag_queries(*args, **kwargs):
+        return 'something'
+    
+    def fake_merge_retrieval_results(x):
+        return [FakeRetrievedChunk()]
+    
+    def fake_rerank_with_expanded_queries(
+        reranker_prompts, texts, reranker_model, top_n
+    ):
+        return [{'index': 0, 'text': 'dummy', 'score': 'score'}]
+    
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x, y: 'dummy')
+    monkeypatch.setattr(agent, "search_by_multi_rag_queries", fake_search_by_multi_rag_queries)
+    monkeypatch.setattr(agent, "merge_retrieval_results", fake_merge_retrieval_results)
+    monkeypatch.setattr(agent, "chunks_to_texts", lambda chunks: 'dummy')
+    monkeypatch.setattr(agent, "rerank_with_expanded_queries", fake_rerank_with_expanded_queries)
+    
+    out = agent._rag_search_and_rerank(
+        resources=_resources(agent, qdrant_service='some',collection_name="ch2_off_parent"),
+        rag_prompts=['1', '2'],
+        reranker_prompts=['1', '2'],
+        output_model=Geology,
+        chapter_module_path = "dummy",
+    )
+    
+    assert out == ["parent_text"]
+
+
+def test_not_use_parent(monkeypatch: pytest.MonkeyPatch):
+    import src.agents.agent as agent
+    
+    class SomeModel(BaseModel):
+        pass
+    
+    @dataclass
+    class FakeRetrievedChunk:
+        text: str = "dummy"
+        parent_text: str = "dummy"
+        score: float = 1.0
+        point_id: str | int = 1
+    
+    def fake_search_by_multi_rag_queries(*args, **kwargs):
+        return 'dummy'
+    
+    
+    def fake_merge_retrieval_results(x):
+        return [FakeRetrievedChunk()]
+    
+    
+    def fake_rerank_with_expanded_queries(
+        reranker_prompts, texts, reranker_model, top_n
+    ):
+        return [{'index': 0, 'text': 'child_text', 'score': 'dummy'}]
+    
+    
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x, y: 'something')
+    monkeypatch.setattr(agent, "search_by_multi_rag_queries", fake_search_by_multi_rag_queries)
+    monkeypatch.setattr(agent, "merge_retrieval_results", fake_merge_retrieval_results)
+    monkeypatch.setattr(agent, "chunks_to_texts", lambda chunks: 'something')
+    monkeypatch.setattr(agent, "rerank_with_expanded_queries", fake_rerank_with_expanded_queries)
+    
+    out = agent._rag_search_and_rerank(
+        resources=_resources(agent, qdrant_service='some', collection_name="ch2_off_parent"),
+        rag_prompts=['1', '2'],
+        reranker_prompts=['1', '2'],
+        output_model=SomeModel,
+        chapter_module_path="dummy",
+    )
+    
+    assert out == ["child_text"]
