@@ -30,6 +30,8 @@ from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
 from src.utils.utils import get_part_names_for_model
 
+MAX_ATTEMPTS = 3
+
 
 @dataclass(frozen=True)
 class GraphResources:
@@ -59,7 +61,7 @@ class Agent2State(TypedDict):
     rewrite_focus: str
     fields_to_rewrite: list[str]
     verified_fields: Annotated[list[str], add]
-    rewrite_count: int
+    attempt: int
 
 
 def _rag_search_and_rerank(
@@ -184,21 +186,16 @@ def _get_chapter_module_path(config: RunnableConfig) -> str:
         raise RuntimeError("В config['metadata'] отсутствует ключ chapter_module_path.")
     return pth
 
+
 def generate_retrieval_prompts_node(
     state: Agent2State, resources: GraphResources
 ) -> Agent2State:
     
     input_query = state["input_query"]
-    prev_rewrite_count = state.get("rewrite_count", 0)
+    attempt = state.get("attempt", 0) + 1
     
-    out = {}
+    out = {"attempt": attempt}
     
-    if state.get("check_decision") == "REWRITE" and prev_rewrite_count < 2:
-        rewrite_count = prev_rewrite_count + 1
-        out["rewrite_count"] = rewrite_count
-    else:
-        rewrite_count = prev_rewrite_count
-
     system_message = SystemMessage(
         "Ты готовишь промпты для RAG по проектной документации (строительство, экология).\n"
         "Твоя задача — извлечь из запроса пользователя ключевые смыслы для эффективного RAG-поиска.\n"
@@ -206,9 +203,9 @@ def generate_retrieval_prompts_node(
     )
 
     extra = ""
-    if rewrite_count > 0:
+    if attempt != 1:
         extra = (
-            f"\n\nЭто попытка повторного поиска (номер {rewrite_count}).\n\n"
+            f"\n\nЭто попытка повторного поиска (номер {attempt - 1}).\n\n"
             f"Причина REWRITE: {state.get('check_reason', '')}\n\n"
             f"Фокус повторного поиска: {state.get('rewrite_focus', '')}\n\n"
             f"Поля требующие повторного поиска: {state.get('fields_to_rewrite', [])}\n\n"
@@ -467,8 +464,16 @@ def check_node(
     }
 
 
+def route_after_answer(state: Agent2State):
+    """Если последняя попытка - уже не проверяем ответ - сразу END"""
+    if state.get("attempt", 0) >= MAX_ATTEMPTS:
+        return END
+    else:
+        return 'check_node'
+
+
 def route_after_check(state: Agent2State) -> str:
-    if state.get("check_decision") == "REWRITE" and state.get("rewrite_count", 0) < 2:
+    if state.get("check_decision") == "REWRITE" and state.get("attempt", 0) < MAX_ATTEMPTS:
         return "generate_retrieval_prompts_node"
     return END
 
@@ -528,7 +533,11 @@ def init_graph(
     builder.add_edge(START, "generate_retrieval_prompts_node")
     builder.add_edge("generate_retrieval_prompts_node", "rag_search_node")
     builder.add_edge("rag_search_node", "answer_node")
-    builder.add_edge("answer_node", "check_node")
+    builder.add_conditional_edges(
+        "answer_node",
+        route_after_answer,
+        {"check_node": "check_node", END: END},
+    )
     builder.add_conditional_edges(
         "check_node",
         route_after_check,

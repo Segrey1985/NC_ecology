@@ -61,7 +61,7 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _config(BaseModel),
         _resources(agent),
@@ -111,7 +111,7 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _resources(agent, llm=FakeLLM()),
     )
@@ -156,11 +156,11 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
             "check_decision": "REWRITE",
             "check_reason": "мало данных",
             "rewrite_focus": "нормы",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _resources(agent, llm=FakeLLM()),
     )
-    assert out["rewrite_count"] == 1
+    assert out["attempt"] == 1
     assert out["rag_prompts"] == ["a", "b", "c"]
 
 
@@ -238,7 +238,7 @@ def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _config(Out),
         _resources(agent2, llm=FakeLLM()),
@@ -279,7 +279,7 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _config(Out),
         _resources(agent, llm=FakeLLM()),
@@ -315,7 +315,7 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _config(Out),
         _resources(agent, llm=FakeLLM()),
@@ -351,7 +351,7 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
             "check_decision": "OK",
             "check_reason": "",
             "rewrite_focus": "",
-            "rewrite_count": 0,
+            "attempt": 0,
         },
         _config(Out),
         _resources(agent, llm=FakeLLM()),
@@ -364,10 +364,11 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
 def test_route_after_check_limits_rewrites():
     import src.agents.agent as agent
 
-    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 0}) == "generate_retrieval_prompts_node"
-    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 1}) == "generate_retrieval_prompts_node"
-    assert agent.route_after_check({"check_decision": "REWRITE", "rewrite_count": 2}) == agent.END
-    assert agent.route_after_check({"check_decision": "OK", "rewrite_count": 0}) == agent.END
+    assert agent.route_after_check({"check_decision": "REWRITE", "attempt": 0}) == "generate_retrieval_prompts_node"
+    assert agent.route_after_check({"check_decision": "REWRITE", "attempt": 1}) == "generate_retrieval_prompts_node"
+    assert agent.route_after_check({"check_decision": "REWRITE", "attempt": 2}) == "generate_retrieval_prompts_node"
+    assert agent.route_after_check({"check_decision": "REWRITE", "attempt": 3}) == agent.END
+    assert agent.route_after_check({"check_decision": "OK", "attempt": 0}) == agent.END
 
 
 def test_init_graph_2_raises_when_collection_unknown_and_no_project_parts_path(monkeypatch: pytest.MonkeyPatch):

@@ -25,6 +25,8 @@ from src.retrieval.qdrant import (
 )
 from src.retrieval.reranker import rerank_chunks
 
+MAX_ATTEMPTS = 3
+
 
 @dataclass(frozen=True)
 class GraphResources:
@@ -52,8 +54,7 @@ class AgentState(TypedDict):
     check_decision: Literal["OK", "REWRITE"]
     check_reason: str
 
-    # rewrite_node
-    rewrite_count: int
+    attempt: int
 
 
 # --- Tools ---
@@ -118,6 +119,7 @@ def search_in_related_disciplines(query: str, resources: GraphResources) -> list
 
 
 def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
+    attempt = state.get("attempt", 0) + 1
     rag_query = state.get("rag_query") or state["for_rag_search"]
     parent_texts = search_in_related_disciplines(rag_query, resources)
     rag_context = format_rag_context(parent_texts)
@@ -125,6 +127,7 @@ def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
     return {
         "rag_query": rag_query,
         "rag_context": rag_context,
+        "attempt": attempt,
     }
 
 
@@ -219,15 +222,22 @@ def rewrite_query_node(state: AgentState, resources: GraphResources) -> AgentSta
 
     return {
         "rag_query": rewritten_query,
-        "rewrite_count": state.get("rewrite_count", 0) + 1,
     }
 
 
+def route_after_answer(state: AgentState):
+    """Если последняя попытка - уже не проверяем ответ - сразу END"""
+    if state.get("attempt", 0) >= MAX_ATTEMPTS:
+        return END
+    else:
+        return 'check_node'
+
+
 def route_after_check(state: AgentState) -> str:
-    MAX_REWRITES = 2
+    
     if (
         state.get("check_decision") == "REWRITE"
-        and state.get("rewrite_count", 0) < MAX_REWRITES
+        and state.get("attempt", 0) < MAX_ATTEMPTS
     ):
         return "rewrite_query_node"
     return END
@@ -282,7 +292,11 @@ def init_graph(
     )
     builder.add_edge(START, "rag_search_node")
     builder.add_edge("rag_search_node", "answer_node")
-    builder.add_edge("answer_node", "check_node")
+    builder.add_conditional_edges(
+        "answer_node",
+        route_after_answer,
+        {"check_node": "check_node", END: END},
+    )
     builder.add_conditional_edges(
         "check_node",
         route_after_check,
@@ -294,9 +308,12 @@ def init_graph(
 
 
 if __name__ == "__main__":
+    
+    from config.config_file import build_runtime_config
+    runtime = build_runtime_config(test_mode="on")
 
     graph, _resources = init_graph(
-        collection_name="agent_base2", project_parts_path=Path("../../data/IN/project1/trim/mini")
+        collection_name="test", project_parts_path=Path("../../data/IN/project1/trim/"), runtime_cfg=runtime
     )
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -304,9 +321,9 @@ if __name__ == "__main__":
 
     for chunk in graph.stream(
         input={
-            "for_rag_search": "Проектируемые электросети",
+            "for_rag_search": "Грунты проекта сложены",
             "examples": [],
-            "question": "Краткое описание проектируемых электросетей и их параметров",
+            "question": "Грунтовый пирог земельного участка",
         },
         stream_mode="updates",
         config=config,
