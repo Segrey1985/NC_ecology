@@ -1,5 +1,6 @@
 import io
 import uuid
+import json
 import tempfile
 import shutil
 import zipfile
@@ -71,6 +72,7 @@ async def _generate_chapter(
     max_workers: int | None = None,
     table_placeholders: UploadFile | None = None,
     result_filename: str = "result.zip",
+    extract_base: bool = True,
 ):
     
     # валидация входных документов
@@ -155,6 +157,37 @@ async def _generate_chapter(
                 test_mode="off",
             )
         else:
+            
+            if extract_base:
+                logger.info(f"[extract_base] START")
+                project_path = Path(__file__).parent
+                chapter0_path = project_path / "src" / "ecology_chapters" / "chapter0"
+                
+                # запускаем main_base и получаем chapter0-плейсхолдеры
+                base_placeholders: dict = run_main_base(
+                    template_docx_path=chapter0_path / "template.docx",
+                    placeholders_path=chapter0_path / "placeholders.json",
+                    table_placeholders_path=chapter0_path / "table_placeholders.json",
+                    project_parts_path=project_parts_dir,
+                    output_path=None,
+                    collection_name=collection_name,
+                    verbose=False,
+                    test_mode="off",
+                )
+                logger.info(f"[extract_base] {base_placeholders.keys()=}")
+                # достаем табличные плейсхолдеры главы X, если они есть
+                chapter_x_table_placeholders = {}
+                if table_placeholders:
+                    with open(table_placeholders_path, 'r', encoding='utf-8') as table_placeholders_file:
+                        chapter_x_table_placeholders = json.load(table_placeholders_file)
+                logger.info(f"[extract_base] {chapter_x_table_placeholders.keys()=}")
+                
+                # добавляем к табличным плейсхолдерам главы X, chapter0-плейсхолдеры, сохраняем
+                chapter_x_table_placeholders.update(base_placeholders)
+                logger.info(f"[extract_base] {chapter_x_table_placeholders.keys()=}")
+                json.dump(chapter_x_table_placeholders, open(table_placeholders_path, 'w', encoding='utf-8'), indent=4)
+                logger.info(f"[extract_base] END")
+            
             run_main(
                 template_docx_path=template_docx_path,
                 project_parts_path=project_parts_dir,
@@ -232,6 +265,7 @@ async def chapter1(
         8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
     ),
     collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    extract_base: bool = Form(default=True, description="[### для отладки ###] Извлекать базовую информацию"),
 ):
     return await _generate_chapter(
         pipeline="chapter",
@@ -242,6 +276,7 @@ async def chapter1(
         collection_name=collection_name,
         max_workers=max_workers,
         result_filename="result2.zip",
+        extract_base=extract_base,
     )
 
 
@@ -265,6 +300,7 @@ async def chapter2(
         8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
     ),
     collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    extract_base: bool = Form(default=True, description="[### для отладки ###] Извлекать базовую информацию"),
 ):
     return await _generate_chapter(
         pipeline="chapter",
@@ -275,6 +311,7 @@ async def chapter2(
         collection_name=collection_name,
         max_workers=max_workers,
         result_filename="chapter2.zip",
+        extract_base=extract_base,
     )
 
 

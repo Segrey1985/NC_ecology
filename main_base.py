@@ -135,12 +135,12 @@ def main(
     placeholders_path: Path,
     table_placeholders_path: Path | None,
     project_parts_path: Path | None,
-    output_path: Path,
+    output_path: Path | None,
     collection_name: str = "main",
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock"] = "on",
     max_workers: int | None = None,
-):
+) -> dict:
     resources: GraphResources | None = None
     try:
         runtime_cfg = build_runtime_config(test_mode)
@@ -219,6 +219,9 @@ def main(
                     data=placeholders_output,
                     output_docx_path=result_template_out_path,
                 )
+
+        return placeholders_output
+
     finally:
         qdrant_service = getattr(resources, "qdrant_service", None)
         if (
