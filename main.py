@@ -111,6 +111,7 @@ def main(
     verbose: bool = True,
     test_mode: Literal["on", "off", "mock", "filter"] = "on",
     max_workers: int | None = None,
+    **kwargs
 ):
     resources: GraphResources | None = None
     try:
@@ -229,16 +230,17 @@ def main(
                     output_docx_path=result_template_out_path,
                 )
     finally:
-        qdrant_service = getattr(resources, "qdrant_service", None)
-        if (
-            qdrant_service
-            and qdrant_service.client.collection_exists(collection_name)
-            and is_valid_uuid4_hex(collection_name)
-        ):
-            qdrant_service.client.delete_collection(collection_name)
-            logger.info(
-                f"collection <{collection_name}> name is valid uuid and was deleted"
-            )
+        if "save_db" not in kwargs:
+            qdrant_service = getattr(resources, "qdrant_service", None)
+            if (
+                qdrant_service
+                and qdrant_service.client.collection_exists(collection_name)
+                and is_valid_uuid4_hex(collection_name)
+            ):
+                qdrant_service.client.delete_collection(collection_name)
+                logger.info(
+                    f"collection <{collection_name}> name is valid uuid and was deleted"
+                )
     logger.info("\n\n ЗАВЕРШЕНО \n\n")
 
 
