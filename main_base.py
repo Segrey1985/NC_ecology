@@ -156,7 +156,7 @@ def main(
         if test_mode == "mock":
             placeholders_output = json.load(
                 open(
-                    "data/mock/chapter1.json",
+                    "data/mock/chapter0.json",
                     encoding="utf-8",
                 )
             )
