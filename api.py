@@ -315,5 +315,185 @@ async def chapter2(
     )
 
 
+@app.post(
+    "/chapters/all",
+    summary="Запуск всех глав одним запросом",
+    description=(
+        "Генерирует главы 0, 1, 2 за один вызов и возвращает единый zip-архив с результатами. "
+        "По умолчанию используются шаблоны и плейсхолдеры из `src/ecology_chapters`."
+    ),
+    tags=["Generation"],
+)
+async def chapters_all(
+    project_parts_zip: UploadFile | None = File(
+        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+    ),
+    # Переопределения для главы 0 (по умолчанию берём файлы из репозитория)
+    placeholders_ch0: UploadFile | None = File(
+        None, description="[опционально] JSON плейсхолдеров для главы 0"
+    ),
+    template_docx_ch0: UploadFile | None = File(
+        None, description="[опционально] DOCX шаблон для главы 0"
+    ),
+    table_placeholders_ch0: UploadFile | None = File(
+        None, description="[опционально] JSON с табличными плейсхолдерами для главы 0"
+    ),
+    table_placeholders_ch1: UploadFile | None = File(
+        None, description="[опционально] JSON с табличными плейсхолдерами для главы 1"
+    ),
+    table_placeholders_ch2: UploadFile | None = File(
+        None, description="[опционально] JSON с табличными плейсхолдерами для главы 2"
+    ),
+    # Переопределения шаблонов сборки для глав 1 и 2
+    template_docx_ch1: UploadFile | None = File(
+        None, description="[опционально] DOCX шаблон для главы 1"
+    ),
+    template_docx_ch2: UploadFile | None = File(
+        None, description="[опционально] DOCX шаблон для главы 2"
+    ),
+    max_workers: int | None = Form(
+        8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
+    ),
+    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    extract_base: bool = Form(default=True, description="[### для отладки ###] Извлекать базовую информацию"),
+):
+    if project_parts_zip:
+        await validate_zip(project_parts_zip)
+    if placeholders_ch0:
+        await validate_json(placeholders_ch0)
+    if template_docx_ch0:
+        await validate_docx(template_docx_ch0)
+    if template_docx_ch1:
+        await validate_docx(template_docx_ch1)
+    if template_docx_ch2:
+        await validate_docx(template_docx_ch2)
+    if table_placeholders_ch0:
+        await validate_json(table_placeholders_ch0)
+    if table_placeholders_ch1:
+        await validate_json(table_placeholders_ch1)
+    if table_placeholders_ch2:
+        await validate_json(table_placeholders_ch2)
+
+    project_path = Path(__file__).parent
+    ch0_dir = project_path / "src" / "ecology_chapters" / "chapter0"
+    ch1_dir = project_path / "src" / "ecology_chapters" / "chapter1"
+    ch2_dir = project_path / "src" / "ecology_chapters" / "chapter2"
+
+    with tempfile.TemporaryDirectory(prefix="nc_ecology_all_") as tmp:
+        tmp_dir = Path(tmp)
+        input_dir = tmp_dir / "in"
+        output_dir = tmp_dir / "out"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        project_parts_dir: Path | None = None
+        if project_parts_zip:
+            project_parts_dir = tmp_dir / "project_parts"
+            project_parts_dir.mkdir(parents=True, exist_ok=True)
+            project_parts_zip_bytes = await project_parts_zip.read()
+            _extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
+
+        # Глава 0: плейсхолдеры/шаблон по умолчанию из репозитория, можно переопределить загрузкой
+        placeholders_ch0_path = ch0_dir / "placeholders.json"
+        if placeholders_ch0:
+            placeholders_ch0_path = input_dir / "chapter0_placeholders.json"
+            placeholders_ch0_path.write_bytes(await placeholders_ch0.read())
+
+        table_placeholders_ch0_path = ch0_dir / "table_placeholders.json"
+        if table_placeholders_ch0:
+            table_placeholders_ch0_path = input_dir / "chapter0_table_placeholders.json"
+            table_placeholders_ch0_path.write_bytes(await table_placeholders_ch0.read())
+
+        template_ch0_path = ch0_dir / "template.docx"
+        if template_docx_ch0:
+            template_ch0_path = input_dir / "chapter0_template.docx"
+            template_ch0_path.write_bytes(await template_docx_ch0.read())
+
+        ch0_out = output_dir / "chapter0"
+        ch1_out = output_dir / "chapter1"
+        ch2_out = output_dir / "chapter2"
+
+        base_placeholders: dict = {}
+        if extract_base:
+            base_placeholders = run_main_base(
+                template_docx_path=template_ch0_path,
+                placeholders_path=placeholders_ch0_path,
+                table_placeholders_path=table_placeholders_ch0_path,
+                project_parts_path=project_parts_dir,
+                output_path=ch0_out,
+                collection_name=collection_name,
+                verbose=False,
+                test_mode="off",
+            )
+        else:
+            ch0_out.mkdir(parents=True, exist_ok=True)
+
+        async def _resolve_chapter_table_placeholders_path(
+            chapter_dir: Path,
+            chapter_key: str,
+            upload: UploadFile | None,
+        ) -> Path | None:
+            table_ph: dict = {}
+            if upload:
+                table_ph = json.loads((await upload.read()).decode("utf-8"))
+            else:
+                default_path = chapter_dir / "table_placeholders.json"
+                if default_path.exists():
+                    table_ph = json.loads(default_path.read_text(encoding="utf-8"))
+            if extract_base:
+                table_ph.update(base_placeholders)
+            if not table_ph:
+                return None
+            out_path = input_dir / f"{chapter_key}_table_placeholders.json"
+            out_path.write_text(
+                json.dumps(table_ph, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            return out_path
+
+        table_placeholders_ch1_path = await _resolve_chapter_table_placeholders_path(
+            ch1_dir, "chapter1", table_placeholders_ch1
+        )
+        table_placeholders_ch2_path = await _resolve_chapter_table_placeholders_path(
+            ch2_dir, "chapter2", table_placeholders_ch2
+        )
+
+        template_ch1_path = ch1_dir / "template.docx"
+        if template_docx_ch1:
+            template_ch1_path = input_dir / "chapter1_template.docx"
+            template_ch1_path.write_bytes(await template_docx_ch1.read())
+
+        template_ch2_path = ch2_dir / "template.docx"
+        if template_docx_ch2:
+            template_ch2_path = input_dir / "chapter2_template.docx"
+            template_ch2_path.write_bytes(await template_docx_ch2.read())
+
+        run_main(
+            template_docx_path=template_ch1_path,
+            project_parts_path=project_parts_dir,
+            table_placeholders_path=table_placeholders_ch1_path,
+            output_path=ch1_out,
+            chapter_module_path="src.ecology_chapters.chapter1",
+            collection_name=collection_name,
+            verbose=False,
+            test_mode="off",
+            max_workers=max_workers,
+        )
+
+        run_main(
+            template_docx_path=template_ch2_path,
+            project_parts_path=project_parts_dir,
+            table_placeholders_path=table_placeholders_ch2_path,
+            output_path=ch2_out,
+            chapter_module_path="src.ecology_chapters.chapter2",
+            collection_name=collection_name,
+            verbose=False,
+            test_mode="off",
+            max_workers=max_workers,
+        )
+
+        return _zip_output_dir(output_dir, "all_chapters.zip")
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
