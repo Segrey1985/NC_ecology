@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import Literal
 from qdrant_client import QdrantClient
+from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -472,32 +473,42 @@ async def chapters_all(
             if template_docx_ch2:
                 template_ch2_path = input_dir / "chapter2_template.docx"
                 template_ch2_path.write_bytes(await template_docx_ch2.read())
-    
-            run_main(
-                template_docx_path=template_ch1_path,
-                project_parts_path=project_parts_dir,
-                table_placeholders_path=table_placeholders_ch1_path,
-                output_path=ch1_out,
-                chapter_module_path="src.ecology_chapters.chapter1",
-                collection_name=collection_name,
-                verbose=False,
-                test_mode="off",
-                max_workers=max_workers,
-                save_db=1
-            )
-    
-            run_main(
-                template_docx_path=template_ch2_path,
-                project_parts_path=project_parts_dir,
-                table_placeholders_path=table_placeholders_ch2_path,
-                output_path=ch2_out,
-                chapter_module_path="src.ecology_chapters.chapter2",
-                collection_name=collection_name,
-                verbose=False,
-                test_mode="off",
-                max_workers=max_workers,
-                save_db=1
-            )
+            
+            logger.info("\nНАЧИНАЮ ФОРМИРОВАТЬ ГЛАВЫ 1 И 2\n")
+            
+            common_args = {
+                "project_parts_path": project_parts_dir,
+                "collection_name": collection_name,
+                "verbose": False,
+                "test_mode": "off",
+                "max_workers": max_workers,
+                "save_db": 1,
+            }
+            
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = [
+                    pool.submit(
+                        run_main,
+                        template_docx_path=template_ch1_path,
+                        table_placeholders_path=table_placeholders_ch1_path,
+                        output_path=ch1_out,
+                        chapter_module_path="src.ecology_chapters.chapter1",
+                        **common_args,
+                    ),
+                    pool.submit(
+                        run_main,
+                        template_docx_path=template_ch2_path,
+                        table_placeholders_path=table_placeholders_ch2_path,
+                        output_path=ch2_out,
+                        chapter_module_path="src.ecology_chapters.chapter2",
+                        **common_args,
+                    ),
+                ]
+                
+                for future in futures:
+                    future.result()
+            
+            logger.info("\nГЛАВЫ 1 И 2 СФОРМИРОВАНЫ\n")
             
             return _zip_output_dir(output_dir, "all_chapters.zip")
         
