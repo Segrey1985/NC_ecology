@@ -168,10 +168,6 @@ class AnswerCheck(BaseModel):
         description="OK, если ответ достаточно обоснован контекстом; иначе REWRITE.",
     )
     reason: str = Field(..., description="Краткая причина решения.")
-    rewrite_focus: Optional[str] = Field(
-        None,
-        description="Что нужно уточнить при переписывании RAG-запроса.",
-    )
 
 
 def check_node(state: AgentState, resources: GraphResources) -> AgentState:
@@ -187,6 +183,8 @@ def check_node(state: AgentState, resources: GraphResources) -> AgentState:
         HumanMessage(
             content=(
                 f"Запрос пользователя:\n{state["question"]}\n\n"
+                f"RAG-контекст:\n"
+                f"{state['rag_context']}\n\n"
                 f"Ответ:\n{state['answer']}"
             )
         ),
