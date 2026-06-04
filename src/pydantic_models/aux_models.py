@@ -10,3 +10,11 @@ class AuxSchema(BaseModel):
         ...,
         description="Краткое наименование объекта (одно слово) в родительном падеже. (например: котельной)",
     )
+    type_of_work_prepositional: str = Field(
+        ...,
+        description="ТИП_РАБОТ в предложном падеже"
+    )
+    type_of_work_genitive: str = Field(
+        ...,
+        description="ТИП_РАБОТ в родительном падеже"
+    )

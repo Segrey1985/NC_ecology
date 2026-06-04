@@ -157,6 +157,10 @@ class Soil(BaseModel):
         ...,
         description="Рекомендации по использованию почв по глубинам",
     )
+    cipher: str = Field(
+        ...,
+        description="Шифр тома проектной документации. Например: '123-2026-ИЭИ' или '05/24-ИЭИ'"
+    )
 
 
 class LandUse(BaseModel):
