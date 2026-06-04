@@ -189,6 +189,8 @@ async def _generate_chapter(
                 # добавляем к табличным плейсхолдерам главы X, chapter0-плейсхолдеры, сохраняем
                 chapter_x_table_placeholders.update(base_placeholders)
                 logger.info(f"[extract_base] {chapter_x_table_placeholders.keys()=}")
+                if not table_placeholders_path:
+                    table_placeholders_path = input_dir / "table_placeholders.json"
                 json.dump(chapter_x_table_placeholders, open(table_placeholders_path, 'w', encoding='utf-8'), indent=4)
                 logger.info(f"[extract_base] END")
             
