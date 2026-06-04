@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent import GraphResources, init_graph
-from config.config_file import build_runtime_config
+from config.config_file import build_runtime_config, TestMode
 from config.langfuse_client import langfuse_config
 from src.utils.logger import logger
 from src.utils.utils import (
@@ -109,7 +109,7 @@ def main(
     chapter_module_path: str,
     collection_name: str = "main",
     verbose: bool = True,
-    test_mode: Literal["on", "off", "mock", "filter"] = "on",
+    test_mode: TestMode = "on",
     max_workers: int | None = None,
     **kwargs
 ):

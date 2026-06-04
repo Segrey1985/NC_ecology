@@ -9,7 +9,7 @@ from src.agents.agent_base import GraphResources, init_graph
 from src.agents.agent_base_aux import init_graph as init_aux_graph
 
 from config.langfuse_client import langfuse_config
-from config.config_file import build_runtime_config
+from config.config_file import build_runtime_config, TestMode
 from src.utils.logger import logger
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.docx_template_engine import fill_docx_template
@@ -138,7 +138,7 @@ def main(
     output_path: Path | None,
     collection_name: str = "main",
     verbose: bool = True,
-    test_mode: Literal["on", "off", "mock"] = "on",
+    test_mode: TestMode = "on",
     max_workers: int | None = None,
     **kwargs
 ) -> dict:

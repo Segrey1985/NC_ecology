@@ -5,15 +5,15 @@ import tempfile
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Annotated
 from qdrant_client import QdrantClient
 from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
 from fastapi.responses import StreamingResponse
 
-from config.config_file import cfg
+from config.config_file import cfg, TestMode
 from main_base import main as run_main_base
 from main import main as run_main
 from src.utils.validators import validate_docx, validate_json, validate_zip
@@ -360,6 +360,7 @@ async def chapters_all(
     ),
     collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
     extract_base: bool = Form(default=True, description="[### для отладки ###] Извлекать базовую информацию"),
+    test_mode: Annotated[TestMode, Query(include_in_schema=False)] = 'off',
 ):
     try:
         if project_parts_zip:
@@ -428,7 +429,7 @@ async def chapters_all(
                     output_path=ch0_out,
                     collection_name=collection_name,
                     verbose=False,
-                    test_mode="off",
+                    test_mode=test_mode,
                     save_db=1
                 )
             else:
@@ -480,7 +481,7 @@ async def chapters_all(
                 "project_parts_path": project_parts_dir,
                 "collection_name": collection_name,
                 "verbose": False,
-                "test_mode": "off",
+                "test_mode": test_mode,
                 "max_workers": max_workers,
                 "save_db": 1,
             }
