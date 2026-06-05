@@ -37,7 +37,7 @@ class Geology(BaseModel):
     )
     num_layers_: str = Field(..., description="Количество инженерно-геологических элементов (ИГЭ)")
     _use_parent: bool = PrivateAttr(default=True)
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИГИ"])
 
 
 class Hydrogeology(BaseModel):
@@ -58,7 +58,7 @@ class Hydrogeology(BaseModel):
             "Пример: 'Ближайший водный объект – р. Нева, расположена в 500 м к югу от площадки.'"
         ),
     )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИГИ"])
 
 
 class DangerousProcesses(BaseModel):
@@ -88,19 +88,12 @@ class DangerousProcesses(BaseModel):
         None,
         description="Дополнительное описание иных опасных процессов (при наличии)",
     )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИГИ"])
 
 
 class Soil(BaseModel):
     """2.1.4. Почвенные условия территории"""
 
-    survey_object: str = Field(
-        ...,
-        description=(
-            "Описание объекта обследования для вводного предложения. "
-            "Пример: 'размещения проектируемой котельной'"
-        ),
-    )
     sampling_description: Optional[str] = Field(
         None,
         description=(
@@ -163,7 +156,7 @@ class Soil(BaseModel):
         ...,
         description="Шифр тома проектной документации. Например: '123-2026-ИЭИ' или '05/24-ИЭИ'"
     )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИЭИ"])
 
 
 class LandUse(BaseModel):
@@ -179,7 +172,7 @@ class LandUse(BaseModel):
     restrictions_text: str = Field(
         ...,
         description=(
-            "Текст с описанием ограничений по данным справок от уполномоченных органов: "
+            "Описание ограничений по данным справок от уполномоченных органов: "
             "ООПТ, объекты культурного наследия, ЗСО, скотомогильники, свалки и т.д. "
             "Каждое ограничение — отдельное предложение."
         ),
@@ -225,7 +218,7 @@ class Technogenic(BaseModel):
             "Снятие плодородного слоя почвы (ПСП) не предусматривается.'"
         ),
     )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИГИ", "ИЭИ"])
 
 
 class PhysicalFactors(BaseModel):
@@ -254,31 +247,7 @@ class PhysicalFactors(BaseModel):
             "Пример: 'Уровень общей вибрации составил 42 дБ при ПДУ 72 дБ.'"
         ),
     )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
-
-
-class Subsoil(BaseModel):
-    """2.3. Охрана недр"""
-
-    site_description: str = Field(
-        ...,
-        description=(
-            "Описание участка для вводного предложения. "
-            "Пример: 'под котельную', 'предстоящей застройки'"
-        ),
-    )
-    locality_name: str = Field(
-        ...,
-        description="Название населённого пункта (например: п. Приозерск, д. Кневицы)",
-    )
-    rosnedra_info: Optional[str] = Field(
-        None,
-        description=(
-            "Дополнительная информация от Роснедр/территориального органа о недрах. "
-            "Заполняется при наличии справки."
-        ),
-    )
-    _part_name: str = PrivateAttr(default=["Изыскания"])
+    _part_name: str = PrivateAttr(default=["ИЭИ"])
 
 
 class Measures(BaseModel):
@@ -292,7 +261,7 @@ class Measures(BaseModel):
             "'проведение рекультивации нарушенных земель'"
         ),
     )
-    _part_name: str = PrivateAttr(default=["Изыскания", "ПЗ"])
+    _part_name: str = PrivateAttr(default=["ИГИ", "ИЭИ", "ПЗ"])
 
 
 class LandPlot(BaseModel):

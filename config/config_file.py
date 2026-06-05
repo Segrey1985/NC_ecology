@@ -72,8 +72,10 @@ class Config(BaseSettings):
     def ai_tunnel_api_key(self) -> str:
         return self.AI_TUNNEL_API_KEY.get_secret_value()
     
+    # `key` - начало наименования файла до символа "_", `value` - значение part_name для записи в qdrant
     DISCIPLINE_BY_NUMBER: dict[str, str] = {
-        "0": "Изыскания",
+        "ИГИ": "ИГИ",
+        "ИЭИ": "ИЭИ",
         "1": "ПЗ",
         "2": "ПЗУ",
         "3": "АР",
@@ -114,5 +116,6 @@ def build_runtime_config(test_mode: TestMode) -> Config:
     return runtime_config
 
 
-logger.info("\n\n\n\n\n---START----\n\n\n\n\n")
+logger.info("\n\n\n\n\n---- START ----\n\n\n\n\n")
+logger.info("---- cfg: ----")
 logger.info('\n'.join(["\n"] + [f"{k}={v}" for k, v in cfg.model_dump().items()]))

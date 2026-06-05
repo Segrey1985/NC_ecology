@@ -94,10 +94,10 @@ class QdrantService:
                 "Cannot build payload: ProjectPart.chunk_pairs list is empty"
             )
 
-        base = self._build_part_payload(project_part.file_path)
+        part_number_and_part_name: dict = self._build_part_payload(project_part.file_path)
         return [
             {
-                **base,
+                **part_number_and_part_name,
                 "text": pair["child_text"],
                 "parent_text": pair["parent_text"],
                 "parent_id": pair["parent_id"]
