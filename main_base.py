@@ -2,7 +2,6 @@ import json
 import uuid
 import threading
 from pathlib import Path
-from typing import Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent_base import GraphResources, init_graph
@@ -35,7 +34,7 @@ def _load_placeholders(placeholders_path: Path, table_placeholders_path: Path | 
 
 
 def _run_graph(
-    graph, for_rag_search: str, examples: list[str], question: str, verbose: bool = True
+    graph, placeholder_info: dict, verbose: bool = True
 ) -> str:
 
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -44,9 +43,10 @@ def _run_graph(
     final_content = ""
     for chunk in graph.stream(
         input={
-            "for_rag_search": for_rag_search,
-            "examples": examples,
-            "question": question,
+            "for_rag_search": placeholder_info["for_rag_search"],
+            "examples": placeholder_info["examples"],
+            "question": placeholder_info["question"],
+            "meta": placeholder_info.get("meta", {}),
         },
         stream_mode="updates",
         config=config,
@@ -86,9 +86,7 @@ def thread_run_graph_for_placeholder(
     try:
         final_content = _run_graph(
             graph=graph,
-            for_rag_search=placeholder_info["for_rag_search"],
-            examples=placeholder_info["examples"],
-            question=placeholder_info["question"],
+            placeholder_info=placeholder_info,
             verbose=verbose,
         )
         return {

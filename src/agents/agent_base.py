@@ -42,6 +42,7 @@ class AgentState(TypedDict):
     for_rag_search: str
     examples: list[str]
     question: str
+    meta: dict
 
     # rag
     rag_query: str
@@ -154,7 +155,14 @@ def answer_node(state: AgentState, resources: GraphResources) -> AgentState:
             content=prompt
         ),
     ]
-    response = llm.with_structured_output(StructuredResponse, strict=True).invoke(messages)
+    
+    response_model = StructuredResponse
+    if response_model_ := state.get("meta", {}).get("response_model"):
+        import src.pydantic_models.agent_base_models
+        response_model = getattr(src.pydantic_models.agent_base_models, response_model_)
+        logger.info(f"[using response_model]: {response_model}]")
+        
+    response = llm.with_structured_output(response_model, strict=True).invoke(messages)
     response_json = response.model_dump_json()
 
     return {
@@ -323,9 +331,13 @@ if __name__ == "__main__":
 
     for chunk in graph.stream(
         input={
-            "for_rag_search": "Грунты проекта сложены",
-            "examples": [],
-            "question": "Грунтовый пирог земельного участка",
+            "for_rag_search": "Тип строительных работ (например, «строительство», «реконструкция», «техническое перевооружение»)",
+            "examples": [
+              "Вопрос: Тип строительных работ\nКонтекст: Проектом предусмотрено строительство автоматизированной газовой котельной.\nОтвет: строительство",
+              "Вопрос: Тип строительных работ\nКонтекст: Проектная документация разработана для технического перевооружения существующей котельной.\nОтвет: техническое перевооружение"
+            ],
+            "question": "Тип строительных работ",
+            "meta": {"response_model": "TypeOfWork"}
         },
         stream_mode="updates",
         config=config,
