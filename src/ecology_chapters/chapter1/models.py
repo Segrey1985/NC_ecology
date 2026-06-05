@@ -7,7 +7,7 @@
 # ─────────────────────────────────────────────
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .inner import *
 
@@ -55,6 +55,7 @@ class Facility(BaseModel):
         ...,
         description="Описание потребителей тепловой энергии (например: многоквартирных домов и объектов социального назначения).",
     )
+    _part_name: str = PrivateAttr(default=['ПЗ'])
 
 
 class LandPlot(BaseModel):
@@ -89,7 +90,7 @@ class LandPlot(BaseModel):
         None,
         description="Координаты поворотных точек границ участка",
     )
-
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 class Structures(BaseModel):
     """Перечень сооружений, размещаемых на участке"""
@@ -98,6 +99,7 @@ class Structures(BaseModel):
         default_factory=list,
         description="Перечень сооружений на участке. Пример элементов: здание котельной, дымовая труба, ограждение из 3D сварной сетки.",
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'АР', 'ПЗ'])
 
 
 class Ownership(BaseModel):
@@ -107,6 +109,7 @@ class Ownership(BaseModel):
         None,
         description="Формулировка права пользования участком (например: договором аренды земельного участка № 123 от 01.01.2024).",
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class SanitaryZone(BaseModel):
@@ -120,6 +123,7 @@ class SanitaryZone(BaseModel):
         None,
         description="Ссылка на конкретный пункт СанПиН (например: гл. VII, табл. 7.1. р.10, п.10.4.1).",
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class Surroundings(BaseModel):
@@ -140,6 +144,7 @@ class Surroundings(BaseModel):
             "'Район расположения предприятия проанализирован на основании следующих официальных данных...'"
         ),
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class GeneralPlan(BaseModel):
@@ -157,6 +162,7 @@ class GeneralPlan(BaseModel):
          - с юга - функциональная зона ...
          """
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class NearestObjects(BaseModel):
@@ -165,6 +171,7 @@ class NearestObjects(BaseModel):
     nearest_objects: list[NearestObject] = Field(
         default_factory=list,
     )
+    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class Architecture(BaseModel):
@@ -226,6 +233,7 @@ class Architecture(BaseModel):
         None,
         description="Описание въезда/выезда на промплощадку (например: с северо-западной стороны).",
     )
+    _part_name: str = PrivateAttr(default=['АР', 'КР', 'ПЗ'])
 
 
 class HeatSupply(BaseModel):
@@ -247,6 +255,7 @@ class HeatSupply(BaseModel):
         ...,
         description="Температурный график (например: 95/70 °С, 105/80 °С).",
     )
+    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
 
 
 class Boilers(BaseModel):
@@ -255,6 +264,7 @@ class Boilers(BaseModel):
     boilers: list[Boiler] = Field(
         default_factory=list,
     )
+    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
 
 
 class Pumps(BaseModel):
@@ -263,6 +273,7 @@ class Pumps(BaseModel):
     pumps: list[Pump] = Field(
         default_factory=list,
     )
+    _part_name: str = PrivateAttr(default=['Система водоснабжения', 'Система водоотведения', 'ТМ', 'ТП', 'ПЗ'])
 
 
 class Fuel(BaseModel):
@@ -308,6 +319,7 @@ class Fuel(BaseModel):
         ...,
         description="Таблица расходов топлива по потребителям",
     )
+    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
 
 
 class PowerSupply(BaseModel):
@@ -341,6 +353,7 @@ class PowerSupply(BaseModel):
         None,
         description="Время автономной работы ДГУ, часов",
     )
+    _part_name: str = PrivateAttr(default=['Система электроснабжения', 'ПЗ'])
 
 
 class WaterTreatment(BaseModel):
@@ -350,6 +363,7 @@ class WaterTreatment(BaseModel):
         ...,
         description="Перечень блоков системы водоподготовки",
     )
+    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'Система водоснабжения', 'Система водоотведения', 'ПЗ'])
 
 
 class UtilityNetworks(BaseModel):
@@ -367,6 +381,7 @@ class UtilityNetworks(BaseModel):
         None,
         description="Описание водоотведения",
     )
+    _part_name: str = PrivateAttr(default=['Система водоснабжения', 'Система водоотведения', 'Система газоснабжения', 'ПЗ'])
 
 
 class Ventilation(BaseModel):
@@ -400,3 +415,4 @@ class Ventilation(BaseModel):
         None,
         description="Количество дефлекторов",
     )
+    _part_name: str = PrivateAttr(default=['ОВИК', 'ПЗ'])

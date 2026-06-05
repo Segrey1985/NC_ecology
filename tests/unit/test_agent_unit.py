@@ -193,7 +193,7 @@ def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch)
             {"index": 0, "text": texts[0], "score": 1.0}
         ],
     )
-    monkeypatch.setattr(agent, "get_part_names_for_model", lambda _m, _path: ["АР", "КР"])
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda _m: ["АР", "КР"])
 
     chunks = agent._rag_search_and_rerank(
         _resources(
@@ -462,7 +462,7 @@ def test_use_parent(monkeypatch: pytest.MonkeyPatch):
     ):
         return [{'index': 0, 'text': 'dummy', 'score': 'score'}]
     
-    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x, y: 'dummy')
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x: 'dummy')
     monkeypatch.setattr(agent, "search_by_multi_rag_queries", fake_search_by_multi_rag_queries)
     monkeypatch.setattr(agent, "merge_retrieval_results", fake_merge_retrieval_results)
     monkeypatch.setattr(agent, "chunks_to_texts", lambda chunks: 'dummy')
@@ -506,7 +506,7 @@ def test_not_use_parent(monkeypatch: pytest.MonkeyPatch):
         return [{'index': 0, 'text': 'child_text', 'score': 'dummy'}]
     
     
-    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x, y: 'something')
+    monkeypatch.setattr(agent, "get_part_names_for_model", lambda x: 'something')
     monkeypatch.setattr(agent, "search_by_multi_rag_queries", fake_search_by_multi_rag_queries)
     monkeypatch.setattr(agent, "merge_retrieval_results", fake_merge_retrieval_results)
     monkeypatch.setattr(agent, "chunks_to_texts", lambda chunks: 'something')

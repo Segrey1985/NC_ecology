@@ -84,13 +84,15 @@ def _rag_search_and_rerank(
     queries = [q.strip() for q in rag_prompts if q and q.strip()]
     if not queries:
         return []
-
+    
+    part_names = get_part_names_for_model(output_model)
+    logger.debug(f"[{output_model.__name__}] part_names: {part_names}")
     query_points_tuple = search_by_multi_rag_queries(
         queries,
         qdrant_service,
         collection_name,
         limit=50,
-        part_names=get_part_names_for_model(output_model, chapter_module_path),
+        part_names=part_names,
     )
     merged = merge_retrieval_results(query_points_tuple)
     texts = chunks_to_texts(merged)

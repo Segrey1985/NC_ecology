@@ -7,8 +7,7 @@ Pydantic-модели данных для генерации Главы 2
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
-from pydantic import PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .inner import (
     IGE,
@@ -38,6 +37,7 @@ class Geology(BaseModel):
     )
     num_layers_: str = Field(..., description="Количество инженерно-геологических элементов (ИГЭ)")
     _use_parent: bool = PrivateAttr(default=True)
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class Hydrogeology(BaseModel):
@@ -58,6 +58,7 @@ class Hydrogeology(BaseModel):
             "Пример: 'Ближайший водный объект – р. Нева, расположена в 500 м к югу от площадки.'"
         ),
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class DangerousProcesses(BaseModel):
@@ -87,6 +88,7 @@ class DangerousProcesses(BaseModel):
         None,
         description="Дополнительное описание иных опасных процессов (при наличии)",
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class Soil(BaseModel):
@@ -161,6 +163,7 @@ class Soil(BaseModel):
         ...,
         description="Шифр тома проектной документации. Например: '123-2026-ИЭИ' или '05/24-ИЭИ'"
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class LandUse(BaseModel):
@@ -196,6 +199,7 @@ class LandUse(BaseModel):
             "'объекты государственной мелиоративной системы'"
         ),
     )
+    _part_name: str = PrivateAttr(default=["ПЗУ"])
 
 
 class Technogenic(BaseModel):
@@ -221,6 +225,7 @@ class Technogenic(BaseModel):
             "Снятие плодородного слоя почвы (ПСП) не предусматривается.'"
         ),
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class PhysicalFactors(BaseModel):
@@ -249,6 +254,7 @@ class PhysicalFactors(BaseModel):
             "Пример: 'Уровень общей вибрации составил 42 дБ при ПДУ 72 дБ.'"
         ),
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class Subsoil(BaseModel):
@@ -272,6 +278,7 @@ class Subsoil(BaseModel):
             "Заполняется при наличии справки."
         ),
     )
+    _part_name: str = PrivateAttr(default=["Изыскания"])
 
 
 class Measures(BaseModel):
@@ -285,27 +292,7 @@ class Measures(BaseModel):
             "'проведение рекультивации нарушенных земель'"
         ),
     )
-
-
-class Facility(BaseModel):
-    """Ссылка на модель Facility из models.py Главы 1 (минимальные поля для Главы 2)"""
-
-    type_nominative: str = Field(
-        ...,
-        description="Наименование объекта в именительном падеже (например: блочно-модульная газовая котельная).",
-    )
-    type_genitive: str = Field(
-        ...,
-        description="Наименование объекта в родительном падеже (например: котельной).",
-    )
-    work_type: str = Field(
-        ...,
-        description="Вид проектных работ (например: строительства, технического перевооружения).",
-    )
-    work_type_capitalized: str = Field(
-        ...,
-        description="Вид проектных работ с заглавной буквы (например: Строительство, Техническое перевооружение).",
-    )
+    _part_name: str = PrivateAttr(default=["Изыскания", "ПЗ"])
 
 
 class LandPlot(BaseModel):
@@ -327,8 +314,9 @@ class LandPlot(BaseModel):
         ...,
         description="Площадь земельного участка в кв.м",
     )
+    _part_name: str = PrivateAttr(default=["ПЗУ"])
 
-#
+
 # if __name__ == "__main__":
 #     from src.utils.utils import iter_models_from_module
 #
