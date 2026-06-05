@@ -185,6 +185,8 @@ def check_node(state: AgentState, resources: GraphResources) -> AgentState:
                 f"Запрос пользователя:\n{state["question"]}\n\n"
                 f"RAG-контекст:\n"
                 f"{state['rag_context']}\n\n"
+                f"Примеры:\n"
+                f"{state['examples']}\n\n"
                 f"Ответ:\n{state['answer']}"
             )
         ),
@@ -202,6 +204,8 @@ def rewrite_query_node(state: AgentState, resources: GraphResources) -> AgentSta
     system_message = SystemMessage(
         "Перепиши запрос для RAG-поиска так, чтобы следующий поиск нашел "
         "контекст, которого не хватило для ответа. Верни только текст запроса."
+        "Помни: RAG использует семантический поиск по текстовым чанкам."
+        "Поэтому в запросе должны быть слова, которые вероятно присутствуют в документе."
     )
     messages = [
         system_message,
