@@ -361,7 +361,6 @@ async def chapters_all(
         8, description="[### для отладки ###] Число потоков для параллельного запуска моделей"
     ),
     collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
-    extract_base: bool = Form(default=True, description="[### для отладки ###] Извлекать базовую информацию"),
     test_mode: Annotated[TestMode, Query(include_in_schema=False)] = 'off',
 ):
     try:
@@ -421,50 +420,50 @@ async def chapters_all(
             ch1_out = output_dir / "chapter1"
             ch2_out = output_dir / "chapter2"
     
-            base_placeholders: dict = {}
-            if extract_base:
-                base_placeholders = run_main_base(
-                    template_docx_path=template_ch0_path,
-                    placeholders_path=placeholders_ch0_path,
-                    table_placeholders_path=table_placeholders_ch0_path,
-                    project_parts_path=project_parts_dir,
-                    output_path=ch0_out,
-                    collection_name=collection_name,
-                    verbose=False,
-                    test_mode=test_mode,
-                    save_db=1
-                )
-            else:
-                ch0_out.mkdir(parents=True, exist_ok=True)
+            base_placeholders = run_main_base(
+                template_docx_path=template_ch0_path,
+                placeholders_path=placeholders_ch0_path,
+                table_placeholders_path=table_placeholders_ch0_path,
+                project_parts_path=project_parts_dir,
+                output_path=ch0_out,
+                collection_name=collection_name,
+                verbose=False,
+                test_mode=test_mode,
+                save_db=1
+            )
     
-            async def _resolve_chapter_table_placeholders_path(
+            def _resolve_chapter_table_placeholders_path(
                 chapter_dir: Path,
-                chapter_key: str,
                 upload: UploadFile | None,
             ) -> Path | None:
-                table_ph: dict = {}
+                """ Добавляет базовые плейсхолдеры в файл table_placeholders главы X  """
+                
                 if upload:
-                    table_ph = json.loads((await upload.read()).decode("utf-8"))
+                    table_placeholders = json.loads((upload.read()).decode("utf-8"))
                 else:
                     default_path = chapter_dir / "table_placeholders.json"
                     if default_path.exists():
-                        table_ph = json.loads(default_path.read_text(encoding="utf-8"))
-                if extract_base:
-                    table_ph.update(base_placeholders)
-                if not table_ph:
+                        table_placeholders = json.loads(default_path.read_text(encoding="utf-8"))
+                    else:
+                        table_placeholders = {}
+                
+                table_placeholders.update(base_placeholders)
+                
+                if not table_placeholders:
                     return None
-                out_path = input_dir / f"{chapter_key}_table_placeholders.json"
+                
+                out_path = input_dir / f"{chapter_dir.name}_table_placeholders.json"
                 out_path.write_text(
-                    json.dumps(table_ph, ensure_ascii=False, indent=2),
+                    json.dumps(table_placeholders, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
                 return out_path
     
-            table_placeholders_ch1_path = await _resolve_chapter_table_placeholders_path(
-                ch1_dir, "chapter1", table_placeholders_ch1
+            table_placeholders_ch1_path = _resolve_chapter_table_placeholders_path(
+                ch1_dir, table_placeholders_ch1
             )
-            table_placeholders_ch2_path = await _resolve_chapter_table_placeholders_path(
-                ch2_dir, "chapter2", table_placeholders_ch2
+            table_placeholders_ch2_path = _resolve_chapter_table_placeholders_path(
+                ch2_dir, table_placeholders_ch2
             )
     
             template_ch1_path = ch1_dir / "template.docx"
