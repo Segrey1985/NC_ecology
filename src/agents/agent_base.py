@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional, TypedDict
+from typing import Literal, TypedDict
 
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import (
@@ -10,12 +10,14 @@ from langchain_core.messages import (
 )
 from pydantic import BaseModel, Field
 
-from src.utils.logger import logger
 from config.config_file import cfg, Config
 from config.langfuse_client import langfuse_config
+
+import src
+from src.utils.logger import logger
 from src.llm import LlmModel
 from src.utils.utils import print_chunk, format_rag_context
-from src.pydantic_models.agent_base_models import StructuredResponse
+from src.ecology_chapters.chapter0.models import StructuredResponse
 from src.retrieval.qdrant import (
     QdrantService,
     build_qdrant_service,
@@ -158,8 +160,7 @@ def answer_node(state: AgentState, resources: GraphResources) -> AgentState:
     
     response_model = StructuredResponse
     if response_model_ := state.get("meta", {}).get("response_model"):
-        import src.pydantic_models.agent_base_models
-        response_model = getattr(src.pydantic_models.agent_base_models, response_model_)
+        response_model = getattr(src.ecology_chapters.chapter0.models, response_model_)
         logger.info(f"[using response_model]: {response_model}]")
         
     response = llm.with_structured_output(response_model, strict=True).invoke(messages)

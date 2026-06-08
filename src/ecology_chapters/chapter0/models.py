@@ -1,5 +1,5 @@
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field
 
 
 # основная модель
