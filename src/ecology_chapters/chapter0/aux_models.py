@@ -2,6 +2,10 @@ from pydantic import BaseModel, Field
 
 
 class AuxSchema(BaseModel):
+    name_genitive: str = Field(
+        ...,
+        description="НАИМЕНОВАНИЕ_ПРОЕКТА в родительном падеже. (например: строительства автоматизированной газовой котельной)"
+    )
     name_nominative_short: str = Field(
         ...,
         description="Краткое наименование объекта (одно слово) в именительном падеже. (например: котельная)",
@@ -17,4 +21,8 @@ class AuxSchema(BaseModel):
     type_of_work_genitive: str = Field(
         ...,
         description="ТИП_РАБОТ в родительном падеже"
+    )
+    purpose_of_object_genitive: str = Field(
+        ...,
+        description="НАЗНАЧЕНИЕ_ОБЪЕКТА в родительном падеже"
     )

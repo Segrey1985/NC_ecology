@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.agent_base import GraphResources, init_graph
 from src.agents.agent_base_aux import init_graph as init_aux_graph
+from src.ecology_chapters.chapter0.calculations import add_calculated_placeholders
 
 from config.langfuse_client import langfuse_config
 from config.config_file import build_runtime_config, TestMode
@@ -203,6 +204,8 @@ def main(
                 table_placeholders=table_placeholders,
                 runtime_cfg=runtime_cfg
             )
+            
+            add_calculated_placeholders(placeholders=placeholders_output)
     
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)

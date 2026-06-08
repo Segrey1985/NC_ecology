@@ -15,7 +15,7 @@ from config.config_file import cfg, Config
 from config.langfuse_client import langfuse_config
 from src.llm import LlmModel
 from src.utils.utils import print_chunk
-from src.pydantic_models.aux_models import AuxSchema
+from src.ecology_chapters.chapter0.aux_models import AuxSchema
 
 # --- state & resources ---
 
