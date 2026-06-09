@@ -21,4 +21,4 @@ RUN python -m pip install --upgrade pip \
 
 COPY . /app
 
-CMD ["python", "api.py"]
+CMD ["python", "-m", "api.api_prod"]
