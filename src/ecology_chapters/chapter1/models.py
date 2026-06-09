@@ -1,61 +1,7 @@
-# ─────────────────────────────────────────────
-# Pydantic-модели данных для генерации главы 1
-# 'Общие сведения об объекте проектирования' раздела ООС.
-#
-# Используется совместно с Jinja2-шаблоном chapter1_template.jinja2.
-# Рендеринг: template.render(**chapter1_data.model_dump())
-# ─────────────────────────────────────────────
-
 from typing import Optional
 from pydantic import BaseModel, Field, PrivateAttr
 
 from .inner import *
-
-
-class Facility(BaseModel):
-    """Основные сведения об объекте проектирования"""
-
-    type_nominative: str = Field(
-        ...,
-        description="Полное наименование объекта в именительном падеже (например: блочно-модульная газовая котельная, котельная).",
-    )
-    type_genitive: str = Field(
-        ...,
-        description="Наименование объекта в родительном падеже (например: котельной, блочно-модульной газовой котельной).",
-    )
-    gender: Gender = Field(
-        ...,
-        description="Грамматический род существительного (m/f/n)",
-    )
-    work_type: WorkType = Field(
-        ...,
-        description="Вид проектных работ",
-    )
-    project_goal: Optional[str] = Field(
-        None,
-        description="Цель строительства/реконструкции/перевооружения (например: перевод котельной на газообразное топливо).",
-    )
-    capacity_text: str = Field(
-        ...,
-        description="Мощность объекта в текстовом формате (например: 0,8 МВт, 4,0 МВт).",
-    )
-    capacity_mw: float = Field(
-        ...,
-        description="Мощность объекта в МВт (число)",
-    )
-    capacity_gcal: float = Field(
-        ...,
-        description="Мощность объекта в Гкал/ч (число)",
-    )
-    address: str = Field(
-        ...,
-        description="Полный адрес объекта",
-    )
-    heat_consumers: str = Field(
-        ...,
-        description="Описание потребителей тепловой энергии (например: многоквартирных домов и объектов социального назначения).",
-    )
-    _part_name: str = PrivateAttr(default=['ПЗ'])
 
 
 class LandPlot(BaseModel):
@@ -67,11 +13,11 @@ class LandPlot(BaseModel):
         pattern=r"^\d{2}:\d{2}:\d{7}:\d+$",
     )
     land_category: str = Field(
-        ...,
+        "не определено",
         description="Категория земель (например: земли населенных пунктов).",
     )
     permitted_use: str = Field(
-        ...,
+        "не определено",
         description="Вид разрешенного использования (например: предоставление коммунальных услуг, коммунальное обслуживание).",
     )
     area_sqm: float = Field(
@@ -82,15 +28,8 @@ class LandPlot(BaseModel):
         None,
         description="Код территориальной зоны по ПЗЗ (например: Т2Ж1, ПР, П2).",
     )
-    coordinate_system: Optional[str] = Field(
-        None,
-        description="Система координат для поворотных точек (например: МСК-47, МСК-53).",
-    )
-    boundary_coordinates: Optional[str] = Field(
-        None,
-        description="Координаты поворотных точек границ участка",
-    )
     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
+
 
 class Structures(BaseModel):
     """Перечень сооружений, размещаемых на участке"""
@@ -133,18 +72,8 @@ class Surroundings(BaseModel):
         ...,
         description="Описание окружения по сторонам света",
     )
-    data_sources: list[str] = Field(
-        ...,
-        description=(
-            "Источники данных для анализа окружения. "
-            "Примеры строк:\n"
-            "- публичная кадастровая карта (https://pkk.rosreestr.ru); "
-            "- ситуационный план размещения котельной М 1:500 (Приложение 1).\n\n"
-            "В тексте встречается в составе предложения: "
-            "'Район расположения предприятия проанализирован на основании следующих официальных данных...'"
-        ),
-    )
     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
+    _use_parent: bool = PrivateAttr(default=True)
 
 
 class GeneralPlan(BaseModel):
@@ -209,31 +138,44 @@ class Architecture(BaseModel):
         None,
         description="Высота помещений до низа строительных конструкций (для БМК), м",
     )
+    _part_name: str = PrivateAttr(default=['АР'])
+
+    
+class Constructive(BaseModel):
+    """Конструктивные решения"""
+    
     wall_thickness_mm: Optional[int] = Field(
         None,
-        description="Толщина стен-сэндвич (для БМК), мм",
+        description="Толщина наружных панелей стен-сэндвич, мм",
     )
     structural_scheme: Optional[str] = Field(
         None,
-        description="Конструктивная схема здания (например: безкаркасная, каркасная).",
-    )
-    stack_count: int = Field(
-        ...,
-        description="Количество газоотводящих стволов",
-    )
-    stack_diameter_mm: int = Field(
-        ...,
-        description="Внутренний диаметр газоотводящих стволов, мм",
-    )
-    stack_height_m: float = Field(
-        ...,
-        description="Высота верха газоотводящих стволов, м",
+        description="Конструктивная схема здания (например: бескаркасная, каркасная, полный каркас).",
     )
     entrance_description: Optional[str] = Field(
         None,
-        description="Описание въезда/выезда на промплощадку (например: с северо-западной стороны).",
+        description="Описание въезда/выезда на промплощадку. Пример: Въезд и выезд на промплощадку предусмотрен с южной стороны.",
     )
-    _part_name: str = PrivateAttr(default=['АР', 'КР', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['АР'])
+    
+    
+class GasFlue(BaseModel):
+    """Газоотводящие (дымовые) трубы"""
+    
+    stack_count: int = Field(
+        ...,
+        description="Количество газоотводящих стволов (дымовых труб)",
+    )
+    stack_diameter_mm: int = Field(
+        ...,
+        description="Диаметр газоотводящих стволов (дымовых труб), мм (Ду)",
+    )
+    stack_height_m: float = Field(
+        ...,
+        description="Высота верха газоотводящих стволов (дымовых труб), м",
+    )
+    _part_name: str = PrivateAttr(default=['АР', 'КР'])
+    
 
 
 class HeatSupply(BaseModel):
@@ -255,29 +197,30 @@ class HeatSupply(BaseModel):
         ...,
         description="Температурный график (например: 95/70 °С, 105/80 °С).",
     )
-    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ТМ', 'ПЗ'])
 
 
 class Boilers(BaseModel):
-    """ "Перечень котлов"""
+    """Перечень котлов"""
 
     boilers: list[Boiler] = Field(
         default_factory=list,
     )
-    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ТМ', 'ПЗ'])
 
 
 class Pumps(BaseModel):
-    """ "Перечень вспомогательного оборудования (насосы)"""
+    """Перечень вспомогательного оборудования (насосы) без дублирования"""
 
     pumps: list[Pump] = Field(
+        description="Вспомогательное оборудование 1 и 2 очереди строительства. Насос ...",
         default_factory=list,
     )
-    _part_name: str = PrivateAttr(default=['Система водоснабжения', 'Система водоотведения', 'ТМ', 'ТП', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ПЗ'])
 
 
 class Fuel(BaseModel):
-    """Сведения о топливе"""
+    """Сведения об основном топливе"""
 
     primary_fuel: str = Field(
         ...,
@@ -290,14 +233,6 @@ class Fuel(BaseModel):
     fuel_density: Optional[float] = Field(
         None,
         description="Плотность топлива, кг/м³",
-    )
-    has_emergency_fuel: bool = Field(
-        False,
-        description="Предусмотрено ли аварийное/резервное топливо",
-    )
-    emergency_fuel_description: Optional[str] = Field(
-        None,
-        description="Описание аварийного/резервного топлива",
     )
     annual_consumption: float = Field(
         ...,
@@ -319,7 +254,21 @@ class Fuel(BaseModel):
         ...,
         description="Таблица расходов топлива по потребителям",
     )
-    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ТП'])
+
+
+class EmergencyFuel(BaseModel):
+    """Сведения об аварийном топливе"""
+    
+    has_emergency_fuel: bool = Field(
+        False,
+        description="Предусмотрено ли аварийное/резервное топливо",
+    )
+    emergency_fuel_description: Optional[str] = Field(
+        None,
+        description="Полное описание аварийного/резервного топлива. ... в случае прекращения подачи газа на котельную, проектом предусматривается ...",
+    )
+    _part_name: str = PrivateAttr(default=['ТП'])
 
 
 class PowerSupply(BaseModel):
@@ -335,7 +284,7 @@ class PowerSupply(BaseModel):
     )
     has_diesel_generator: bool = Field(
         False,
-        description="Наличие ДГУ",
+        description="В тексте явно говорится о наличии дизельного генератора",
     )
     diesel_generator_model: Optional[str] = Field(
         None,
@@ -361,9 +310,9 @@ class WaterTreatment(BaseModel):
 
     equipment: list[str] = Field(
         ...,
-        description="Перечень блоков системы водоподготовки",
+        description="Перечень блоков системы водоподготовки. ... рекомендуем установить систему водоподготовки, состоящую из следующих блоков...",
     )
-    _part_name: str = PrivateAttr(default=['ТМ', 'ТП', 'Система водоснабжения', 'Система водоотведения', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ТМ', 'ПЗ'])
 
 
 class UtilityNetworks(BaseModel):
@@ -371,15 +320,15 @@ class UtilityNetworks(BaseModel):
 
     gas_supply: Optional[str] = Field(
         None,
-        description="Описание газоснабжения",
+        description="Описание газоснабжения. Пример: Газоснабжение предусмотрено в соответствие с Техническими условиями на подключение (технологическое присоединение) газоиспользующего оборудования и объектов капитального строительства к сетям газорапределения, выданными ...",
     )
     water_supply: Optional[str] = Field(
         None,
-        description="Описание водоснабжения",
+        description="Описание водоснабжения. Пример: Проектом предусматривается подключение объекта к централизованной системе холодного водоснабжения согласно Техническим условиям, выданными...",
     )
     sewerage: Optional[str] = Field(
         None,
-        description="Описание водоотведения",
+        description="Описание водоотведения. Пример: Водоотведение предусматривается в емкость для приема стоков / водосборный колодец.",
     )
     _part_name: str = PrivateAttr(default=['Система водоснабжения', 'Система водоотведения', 'Система газоснабжения', 'ПЗ'])
 
