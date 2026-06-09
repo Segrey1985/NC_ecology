@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict
 
 from src.retrieval.rank_fusion import MergeStrategy, fuse_ranked_lists
-from src.retrieval.reranker import rerank_chunks
+from src.retrieval.reranker import rerank_chunks, TOP_N
 from src.utils.logger import logger
 
 DEFAULT_MERGE_STRATEGY: MergeStrategy = "rrf"
@@ -55,7 +55,7 @@ def multiple_rerank(
     if not clean_queries or not chunks:
         return []
 
-    top_n = len(chunks) if score_all else 5
+    top_n = len(chunks) if score_all else TOP_N
     results: list[tuple[str, list[RerankHit]]] = [(query, []) for query in clean_queries]
     workers = max_workers or min(8, len(clean_queries))
 
@@ -134,7 +134,7 @@ def rerank_with_expanded_queries(
     chunks: list[str],
     reranker_model: str,
     *,
-    top_n: int = 5,
+    top_n: int = TOP_N,
     merge_strategy: MergeStrategy = DEFAULT_MERGE_STRATEGY,
     rrf_k: int = 60,
     max_workers: int | None = 4,

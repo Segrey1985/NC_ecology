@@ -25,6 +25,7 @@ from src.retrieval.retrieval_expansion import (
     search_by_multi_rag_queries,
 )
 from src.retrieval.reranker_expansion import rerank_with_expanded_queries
+from src.retrieval.reranker import TOP_N
 from src.utils.logger import logger
 from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
@@ -101,12 +102,12 @@ def _rag_search_and_rerank(
         return []
 
     ranked_child_chunks = rerank_with_expanded_queries(
-        reranker_prompts, texts, reranker_model, top_n=5
+        reranker_prompts, texts, reranker_model, top_n=TOP_N
     )
 
     if not ranked_child_chunks:
         logger.warning("? reranker returned no results ?; fallback to retrieval results")
-        return [chunk.parent_text for chunk in merged[:5]]
+        return [chunk.parent_text for chunk in merged[:TOP_N]]
     
     # выбираем использовать child_chink или parent_chunk
     

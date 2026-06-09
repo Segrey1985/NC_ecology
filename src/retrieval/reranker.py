@@ -15,6 +15,8 @@ from src.retrieval.qdrant import ProjectPart
 # model_name = "BAAI/bge-reranker-v2-m3"
 # model_name = "qilowoq/bge-reranker-v2-m3-en-ru"
 
+TOP_N = 6
+
 
 def _load_local_reranker(reranker_model: str):
     models_dir = cfg.BASE_DIR / "data" / "__local_models"
@@ -48,7 +50,7 @@ def rerank_with_local_reranker(
     query: str,
     chunks: list[str],
     *,
-    top_n: int | None = 5,
+    top_n: int | None = TOP_N,
     batch_size: int = 32,
 ) -> list[dict]:
 
@@ -80,7 +82,7 @@ def rerank_with_local_reranker(
 
 
 def rerank_with_api(
-    model_name: str, query: str, chunks: list[str], *, top_n: int = 5
+    model_name: str, query: str, chunks: list[str], *, top_n: int = TOP_N
 ) -> list[dict]:
     response = requests.post(
         "https://api.aitunnel.ru/v1/rerank",
@@ -114,7 +116,7 @@ def rerank_with_api(
 
 
 def rerank_chunks(
-    query: str, chunks: list[str], reranker_model: str, *, top_n: int = 5
+    query: str, chunks: list[str], reranker_model: str, *, top_n: int = TOP_N
 ) -> list[dict]:
     """Делает rerank и возвращает список словарей с информацией о чанках с ключами index, text, score"""
     is_local = rerankers_list[reranker_model]["is_local"]
