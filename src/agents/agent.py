@@ -31,6 +31,7 @@ from src.utils.validators import validate_and_dump_json_str
 from src.utils.utils import get_part_names_for_model
 
 MAX_ATTEMPTS = 3
+N_PROMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -154,10 +155,10 @@ class RetrievalPrompts(BaseModel):
 
     rag_prompts: list[RagPrompt] = Field(
         ...,
-        min_length=3,
-        max_length=3,
+        min_length=N_PROMPTS,
+        max_length=N_PROMPTS,
         description=(
-            "Ровно 3 разных семантических запроса для dense-поиска в Qdrant. "
+            f"Ровно {N_PROMPTS} разных семантических запроса для dense-поиска в Qdrant. "
             "Каждый — отдельный угол: синонимы, аббревиатуры, формулировки из ПД/СП. "
             "Запросы не должны дублировать друг друга дословно."
         ),
@@ -165,10 +166,10 @@ class RetrievalPrompts(BaseModel):
 
     reranker_prompts: list[RerankPrompt] = Field(
         ...,
-        min_length=3,
-        max_length=3,
+        min_length=N_PROMPTS,
+        max_length=N_PROMPTS,
         description=(
-            "Ровно 3 разных коротких запроса для cross-encoder reranker. "
+            f"Ровно {N_PROMPTS} разных коротких запроса для cross-encoder reranker. "
             "Каждый описывает отдельный аспект целевой информации во фрагменте; "
             "формулировки не дублируют друг друга дословно."
         ),
@@ -233,22 +234,22 @@ def generate_retrieval_prompts_node(
         for item in prompts.rag_prompts
         if item.rag_prompt.strip()
     ]
-    if len(expanded) != 3:
-        logger.warning("len(RetrievalPrompts.rag_prompts) != 3: %s", expanded)
-    while len(expanded) < 3:
+    if len(expanded) != N_PROMPTS:
+        logger.warning(f"len(RetrievalPrompts.rag_prompts) != {N_PROMPTS}, {expanded}")
+    while len(expanded) < N_PROMPTS:
         expanded.append(input_query)
-    out["rag_prompts"] = expanded[:3]
+    out["rag_prompts"] = expanded[:N_PROMPTS]
 
     rerank_expanded = [
         item.reranker_prompt.strip()
         for item in prompts.reranker_prompts
         if item.reranker_prompt.strip()
     ]
-    if len(rerank_expanded) != 3:
-        logger.warning("len(RetrievalPrompts.reranker_prompts) != 3: %s", rerank_expanded)
-    while len(rerank_expanded) < 3:
+    if len(rerank_expanded) != N_PROMPTS:
+        logger.warning(f"len(RetrievalPrompts.reranker_prompts) != {N_PROMPTS}, {rerank_expanded}")
+    while len(rerank_expanded) < N_PROMPTS:
         rerank_expanded.append(input_query)
-    out["reranker_prompts"] = rerank_expanded[:3]
+    out["reranker_prompts"] = rerank_expanded[:N_PROMPTS]
 
     return out
 
