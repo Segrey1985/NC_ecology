@@ -89,8 +89,13 @@ async def resolve_table_placeholders_path(
     spec: ChapterSpec,
     input_dir: Path,
     base_placeholders: dict | None = None,
+    source_path: Path | None = None,
 ) -> Path | None:
-    if upload is not None:
+    """ Слить table_plh-s + base_plh-s и сохранить в 'input_dir/chapterX_table_placeholders.json' """
+    
+    if source_path is not None and source_path.exists():
+        data = json.loads(source_path.read_text(encoding="utf-8"))
+    elif upload is not None:
         data = json.loads((await upload.read()).decode("utf-8"))
     else:
         default_path = spec.default_table_placeholders()
@@ -181,6 +186,7 @@ async def generate_chapter(
     max_workers = spec.default_max_workers if max_workers is None else max_workers
     extract_base = spec.default_extract_base if extract_base is None else extract_base
 
+    # Валидация загруженных файлов до создания временной директории.
     if placeholders:
         await validate_json(placeholders)
     if template_docx:
@@ -196,6 +202,9 @@ async def generate_chapter(
         output_dir = tmp_dir / "out"
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # --- Разрешение путей к входным файлам ---
+        # resolve_path: upload → запись во временный файл, иначе — дефолт из spec.
 
         placeholders_path: Path | None = None
         if pipeline == "base":
@@ -223,6 +232,7 @@ async def generate_chapter(
 
         table_placeholders_path: Path | None = None
         if table_placeholders:
+            # Upload уже прочитан здесь — повторно читать UploadFile нельзя.
             table_placeholders_path = await resolve_path(
                 table_placeholders,
                 spec.default_table_placeholders(),
@@ -250,6 +260,7 @@ async def generate_chapter(
         logger.info(f"{max_workers=}")
         logger.info(f"{output_dir=}")
 
+        # --- Запуск пайплайна "base" или "chapter" ---
         if pipeline == "base":
             run_main_base(
                 template_docx_path=template_docx_path,
@@ -263,27 +274,34 @@ async def generate_chapter(
             )
         else:
             if extract_base:
+                # Шаг 1: извлечь общие плейсхолдеры
                 logger.info("[extract_base] START")
                 base_placeholders: dict = run_main_base(
                     template_docx_path=CHAPTER0.default_template(),
                     placeholders_path=CHAPTER0.default_placeholders(),
                     table_placeholders_path=CHAPTER0.default_table_placeholders(),
                     project_parts_path=project_parts_dir,
-                    output_path=None,
+                    output_path=output_dir / "__debug__" / CHAPTER0.name,
                     collection_name=collection_name,
                     verbose=False,
                     test_mode="off",
                 )
                 logger.info(f"[extract_base] {base_placeholders.keys()=}")
+
+                # Шаг 2: слить base_placeholders с табличными плейсхолдерами главы.
+                # Если table_placeholders_path уже есть — читаем с диска (source_path),
+                # а не из UploadFile
                 table_placeholders_path = await resolve_table_placeholders_path(
-                    table_placeholders,
+                    None if table_placeholders_path else table_placeholders,
                     spec,
                     input_dir,
                     base_placeholders,
+                    source_path=table_placeholders_path,
                 )
                 logger.info(f"[extract_base] {table_placeholders_path=}")
                 logger.info("[extract_base] END")
 
+            # Шаг 3 (или единственный шаг без extract_base): генерация главы.
             run_main(
                 template_docx_path=template_docx_path,
                 project_parts_path=project_parts_dir,

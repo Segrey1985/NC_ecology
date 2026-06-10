@@ -84,12 +84,10 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         rag_prompts = [
             agent.RagPrompt(rag_prompt="  dense1  "),
             agent.RagPrompt(rag_prompt="  dense2  "),
-            agent.RagPrompt(rag_prompt="  dense3  "),
         ]
         reranker_prompts = [
             agent.RerankPrompt(reranker_prompt="  rerank1  "),
             agent.RerankPrompt(reranker_prompt="  rerank2  "),
-            agent.RerankPrompt(reranker_prompt="  rerank3  "),
         ]
 
     class FakeStructured:
@@ -115,8 +113,8 @@ def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
         },
         _resources(agent, llm=FakeLLM()),
     )
-    assert out["rag_prompts"] == ["dense1", "dense2", "dense3"]
-    assert out["reranker_prompts"] == ["rerank1", "rerank2", "rerank3"]
+    assert out["rag_prompts"] == ["dense1", "dense2"]
+    assert out["reranker_prompts"] == ["rerank1", "rerank2"]
 
 
 def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: pytest.MonkeyPatch):
@@ -129,12 +127,10 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         rag_prompts = [
             agent.RagPrompt(rag_prompt="a"),
             agent.RagPrompt(rag_prompt="b"),
-            agent.RagPrompt(rag_prompt="c"),
         ]
         reranker_prompts = [
             agent.RerankPrompt(reranker_prompt="r1"),
             agent.RerankPrompt(reranker_prompt="r2"),
-            agent.RerankPrompt(reranker_prompt="r3"),
         ]
 
     class FakeStructured:
@@ -161,7 +157,7 @@ def test_generate_retrieval_prompts_increments_count_after_rewrite(monkeypatch: 
         _resources(agent, llm=FakeLLM()),
     )
     assert out["attempt"] == 1
-    assert out["rag_prompts"] == ["a", "b", "c"]
+    assert out["rag_prompts"] == ["a", "b"]
 
 
 def test_rag_search_passes_part_names_to_qdrant(monkeypatch: pytest.MonkeyPatch):

@@ -12,7 +12,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.agents.agent import GraphResources, init_graph
 from config.config_file import build_runtime_config, TestMode
 from config.langfuse_client import langfuse_config
-from src.utils.logger import logger
+from src.utils.logger import (
+    add_output_log_file,
+    logger,
+    logger_file_format,
+    print_and_save_thread_logs,
+)
 from src.utils.utils import (
     print_chunk,
     is_valid_uuid4_hex,
@@ -74,7 +79,12 @@ def _log_thread():
     def _capture_sink(message) -> None:
         log_lines.append(message.strip())
 
-    handler_id = logger.add(_capture_sink, filter=_only_this_thread, colorize=True)
+    handler_id = logger.add(
+        _capture_sink,
+        filter=_only_this_thread,
+        format=logger_file_format,
+        colorize=False,
+    )
     return handler_id, log_lines
 
 
@@ -113,7 +123,12 @@ def main(
     max_workers: int | None = None,
     **kwargs
 ):
+    
     resources: GraphResources | None = None
+    output_log_handler_id: int | None = None
+    if output_path:
+        output_log_handler_id = add_output_log_file(output_path)
+        
     try:
         chapter_name = chapter_module_path.split('.')[-1]
         runtime_cfg = build_runtime_config(test_mode)
@@ -180,13 +195,7 @@ def main(
 
         # print results
 
-        for t in total_results:
-            model_name = t["model_name"]
-            log_lines = t["logs_lines"]
-            print(f"\n--- Логи потока {model_name} ({len(log_lines)} записей) ---")
-            for line in log_lines:
-                print(line)
-            print("--- конец логов потока ---\n")
+        print_and_save_thread_logs(output_path, total_results, "model_name")
 
         # export results
 
@@ -230,6 +239,8 @@ def main(
                     output_docx_path=result_template_out_path,
                 )
     finally:
+        if output_log_handler_id is not None:
+            logger.remove(output_log_handler_id)
         if "save_db" not in kwargs:
             qdrant_service = getattr(resources, "qdrant_service", None)
             if (

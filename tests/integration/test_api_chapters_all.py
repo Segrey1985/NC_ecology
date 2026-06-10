@@ -5,7 +5,7 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
-from api import app
+from api.api_debug import app
 from src.utils.logger import logger
 
 

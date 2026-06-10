@@ -30,26 +30,30 @@ def test_assemble_partial_results():
     data = filter_mode_payload_and_validate(
         assembly,
         {
-            "Facility": {
-                "type_nominative": "котельная",
-                "type_genitive": "котельной",
-                "gender": "f",
-                "work_type": "строительство",
-                "project_goal": "цель",
-                "capacity_text": "1 МВт",
-                "capacity_mw": 1.0,
-                "capacity_gcal": 0.86,
-                "address": "адрес",
-                "heat_consumers": "потребители",
+            "Architecture": {
+                "building_type": "stationary",
+                "floors": "1",
+                "construction_type": "отдельно стоящая котельная, одноэтажное здание без подвала и технического этажа",
+                "module_count": None,
+                "axes": "1-6, А-Г",
+                "dimensions": "30.0х18.0 м",
+                "building_height_m": 8.25,
+                "room_height_m": 6.5,
+                "wall_thickness_mm": 100,
+                "structural_scheme": "стальной каркас",
+                "stack_count": 1,
+                "stack_diameter_mm": 0,
+                "stack_height_m": 17.85,
+                "entrance_description": None
             }
         },
     )
     ctx = filter_mode_assembly_to_docx_context(assembly, data)
-    assert ctx["facility"]["type_nominative"] == "котельная"
+    assert ctx["architecture"]["floors"] == "1"
     assert ctx["land_plot"] == {}
 
     ctx_filter = filter_mode_assembly_to_docx_context(assembly, data, preserve_unfilled=True)
-    assert ctx_filter["facility"]["type_nominative"] == "котельная"
+    assert ctx_filter["architecture"]["floors"] == "1"
     assert ctx_filter["land_plot"]["area_sqm"] == "{{ land_plot.area_sqm }}"
     assert ctx_filter["structures"]["structures"] == ["{{ structures.structures }}"]
 

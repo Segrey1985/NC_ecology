@@ -10,7 +10,12 @@ from src.ecology_chapters.chapter0.calculations import add_calculated_placeholde
 
 from config.langfuse_client import langfuse_config
 from config.config_file import build_runtime_config, TestMode
-from src.utils.logger import logger
+from src.utils.logger import (
+    add_output_log_file,
+    logger,
+    logger_file_format,
+    print_and_save_thread_logs,
+)
 from src.utils.utils import print_chunk, is_valid_uuid4_hex
 from src.templates.docx_template_engine import fill_docx_template
 
@@ -72,7 +77,12 @@ def _log_thread():
     def _capture_sink(message) -> None:
         log_lines.append(message.strip())
 
-    handler_id = logger.add(_capture_sink, filter=_only_this_thread, colorize=True)
+    handler_id = logger.add(
+        _capture_sink,
+        filter=_only_this_thread,
+        format=logger_file_format,
+        colorize=False,
+    )
     return handler_id, log_lines
 
 
@@ -141,7 +151,12 @@ def main(
     max_workers: int | None = None,
     **kwargs
 ) -> dict:
+    
     resources: GraphResources | None = None
+    output_log_handler_id: int | None = None
+    if output_path:
+        output_log_handler_id = add_output_log_file(output_path)
+        
     try:
         runtime_cfg = build_runtime_config(test_mode)
         
@@ -191,13 +206,7 @@ def main(
                     placeholders_output[dct["placeholder"]] = dct["result"]
                     total_results.append(dct)
 
-            for t in total_results:
-                placeholder = t["placeholder"]
-                log_lines = t["logs_lines"]
-                print(f"\n--- Логи потока {placeholder} ({len(log_lines)} записей) ---")
-                for line in log_lines:
-                    print(line)
-                print("--- конец логов потока ---\n")
+            print_and_save_thread_logs(output_path, total_results, "placeholder")
             
             add_auxiliary_placeholders(
                 placeholders_chapter_0=placeholders_output,
@@ -225,6 +234,8 @@ def main(
         return placeholders_output
 
     finally:
+        if output_log_handler_id is not None:
+            logger.remove(output_log_handler_id)
         if "save_db" not in kwargs:
             qdrant_service = getattr(resources, "qdrant_service", None)
             if (

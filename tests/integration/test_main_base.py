@@ -21,10 +21,10 @@ def test_main_base():
             test_mode="on",
         )
 
-        created_files = [p for p in output_dir.rglob("*") if p.is_file()]
-        assert (
-            len(created_files) == 2
-        ), f"Ожидалось 2 файла, найдено {len(created_files)}: {created_files}"
+        assert (output_dir / "placeholders.json").is_file()
+        assert (output_dir / "result_template.docx").is_file()
+        assert (output_dir / "run.log").is_file()
+        assert any((output_dir / "logs").glob("*.log"))
 
 
 def test_main_base_create_new_uuid_collection_and_delete():
