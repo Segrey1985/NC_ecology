@@ -27,6 +27,7 @@ models = {
     # gpt
     "gpt5.1": "gpt-5.1",
     "gpt54mini": "gpt-5.4-mini",
+    "nano": "gpt-5.4-nano",
     
     # other
     "glm5": "glm-5",
