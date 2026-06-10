@@ -28,7 +28,7 @@ class LandPlot(BaseModel):
         None,
         description="Код территориальной зоны по ПЗЗ (например: Т2Ж1, ПР, П2).",
     )
-    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
+    _part_name: str = PrivateAttr(default=['ПЗУ'])
 
 
 class Structures(BaseModel):
@@ -70,28 +70,28 @@ class Surroundings(BaseModel):
 
     directions: list[SurroundingDirection] = Field(
         ...,
-        description="Описание окружения по сторонам света",
+        description="Описание окружения по 8 румбам",
     )
     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
     _use_parent: bool = PrivateAttr(default=True)
 
 
-class GeneralPlan(BaseModel):
-    """Ограничения площадки по сведениям из Генерального плана"""
-
-    constraints_on_the_industrial_site: str = Field(
-        None,
-        description="""
-        Перечь зон согласно генеральному плану граничащих со строительной площадкой"
-        Например: В соответствии со сведениями Генерального плана ...
-        ... муниципального района ... области, утвержденного решением ...
-         от 01.01.2000 г. промплощадка ограничена
-         - с севера - Зона ...
-         - c востока - Зона застройки жилыми домами
-         - с юга - функциональная зона ...
-         """
-    )
-    _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
+# class GeneralPlan(BaseModel):
+#     """Ограничения площадки по сведениям из Генерального плана"""
+#
+#     constraints_on_the_industrial_site: str = Field(
+#         None,
+#         description="""
+#         Перечь зон согласно генеральному плану граничащих со строительной площадкой"
+#         Например: В соответствии со сведениями Генерального плана ...
+#         ... муниципального района ... области, утвержденного решением ...
+#          от 01.01.2000 г. промплощадка ограничена
+#          - с севера - Зона ...
+#          - c востока - Зона застройки жилыми домами
+#          - с юга - функциональная зона ...
+#          """
+#     )
+#     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
 
 class NearestObjects(BaseModel):
