@@ -112,22 +112,26 @@ st.file_uploader(
     key="project_parts_zip",
 )
 
-col0, col1, col2, col_all = st.columns(4)
+tab0, tab1, tab2, tab_all = st.tabs(["Глава 0", "Глава 1", "Глава 2", "Все главы"])
 
-with col0:
-    if st.button("Глава 0"):
+with tab0:
+    st.caption("Аннотация и введение")
+    if st.button("Запуск", key="run_ch0"):
         _run_action("Глава 0", lambda b, n: _generate(CHAPTER0, b, n))
 
-with col1:
-    if st.button("Глава 1"):
+with tab1:
+    st.caption("ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ")
+    if st.button("Запуск", key="run_ch1"):
         _run_action("Глава 1", lambda b, n: _generate(CHAPTER1, b, n))
 
-with col2:
-    if st.button("Глава 2"):
+with tab2:
+    st.caption("ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ")
+    if st.button("Запуск", key="run_ch2"):
         _run_action("Глава 2", lambda b, n: _generate(CHAPTER2, b, n))
 
-with col_all:
-    if st.button("Все главы"):
+with tab_all:
+    st.caption("Генерация глав 0, 1 и 2 одним запросом")
+    if st.button("Запуск", key="run_all"):
         _run_action("Все главы", _generate_all)
 
 if st.session_state.result_bytes:
