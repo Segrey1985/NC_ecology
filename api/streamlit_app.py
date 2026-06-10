@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import pandas as pd
 import streamlit as st
 from fastapi import HTTPException, UploadFile
 from starlette.datastructures import Headers
@@ -99,6 +100,23 @@ def _run_action(label: str, action):
     status.success(f"{label}: готово")
 
 
+def _params_table(editor_key: str):
+    """Таблица 2×2: первый столбец (a, b) только для чтения."""
+    st.subheader("Табличные данные")
+    df = pd.DataFrame({"ключ": ["a", "b"], "значение": ["", ""]})
+    st.data_editor(
+        df,
+        column_config={
+            "ключ": st.column_config.TextColumn("ключ", disabled=True),
+            "значение": st.column_config.TextColumn("значение"),
+        },
+        disabled=["ключ"],
+        hide_index=True,
+        use_container_width=True,
+        key=editor_key,
+    )
+    
+
 st.set_page_config(page_title="NC_ecology", layout="centered")
 st.title("NC_ecology")
 
@@ -116,21 +134,25 @@ tab0, tab1, tab2, tab_all = st.tabs(["Глава 0", "Глава 1", "Глава
 
 with tab0:
     st.caption("Аннотация и введение")
+    _params_table("table_ch0")
     if st.button("Запуск", key="run_ch0"):
         _run_action("Глава 0", lambda b, n: _generate(CHAPTER0, b, n))
 
 with tab1:
     st.caption("ОБЩИЕ СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОЕКТИРОВАНИЯ")
+    _params_table("table_ch1")
     if st.button("Запуск", key="run_ch1"):
         _run_action("Глава 1", lambda b, n: _generate(CHAPTER1, b, n))
 
 with tab2:
     st.caption("ВОЗДЕЙСТВИЕ ОБЪЕКТА НА ЗЕМЕЛЬНЫЕ РЕСУРСЫ")
+    _params_table("table_ch2")
     if st.button("Запуск", key="run_ch2"):
         _run_action("Глава 2", lambda b, n: _generate(CHAPTER2, b, n))
 
 with tab_all:
     st.caption("Генерация глав 0, 1 и 2 одним запросом")
+    _params_table("table_all")
     if st.button("Запуск", key="run_all"):
         _run_action("Все главы", _generate_all)
 
