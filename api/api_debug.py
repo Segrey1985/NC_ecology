@@ -1,7 +1,5 @@
-import uuid
-from typing import Annotated
-
 import uvicorn
+from typing import Annotated
 from fastapi import FastAPI, File, Form, Query, UploadFile
 
 from config.config_file import TestMode
@@ -48,7 +46,7 @@ async def chapter0(
         None,
         description="[### для отладки ###] DOCX шаблон (по умолчанию из src/ecology_chapters/chapter0)",
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    collection_name: str | None = Form(None, description="[### для отладки ###] Имя коллекции"),
 ):
     return await generate_chapter(
         spec=CHAPTER0,
@@ -82,7 +80,7 @@ async def chapter1(
         CHAPTER1.default_max_workers,
         description="[### для отладки ###] Число потоков для параллельного запуска моделей",
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    collection_name: str | None = Form(None, description="[### для отладки ###] Имя коллекции"),
     extract_base: bool = Form(
         default=CHAPTER1.default_extract_base,
         description="[### для отладки ###] Извлекать базовую информацию",
@@ -121,7 +119,7 @@ async def chapter2(
         CHAPTER2.default_max_workers,
         description="[### для отладки ###] Число потоков для параллельного запуска моделей",
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    collection_name: str | None = Form(None, description="[### для отладки ###] Имя коллекции"),
     extract_base: bool = Form(
         default=CHAPTER2.default_extract_base,
         description="[### для отладки ###] Извлекать базовую информацию",
@@ -176,7 +174,7 @@ async def chapters_all(
         CHAPTER1.default_max_workers,
         description="[### для отладки ###] Число потоков для параллельного запуска моделей",
     ),
-    collection_name: str = Form(uuid.uuid4().hex, description="[### для отладки ###] Имя коллекции"),
+    collection_name: str | None = Form(None, description="[### для отладки ###] Имя коллекции"),
     test_mode: Annotated[TestMode, Query(include_in_schema=False)] = "off",
 ):
     return await generate_all_chapters(
