@@ -88,7 +88,7 @@ def _params_table(editor_key: str):
         },
         disabled=["ключ"],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         key=editor_key,
     )
 
