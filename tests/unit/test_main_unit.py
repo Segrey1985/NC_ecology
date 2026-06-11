@@ -106,7 +106,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     out_dir = tmp_path / "out"
     main.main(
         template_docx_path=None,
-        project_parts_path=None,
+        project_parts_zip=None,
         table_placeholders_path=None,
         output_path=out_dir,
         chapter_module_path="does.not.matter",
@@ -155,7 +155,7 @@ def test_main_filter_mode_uses_iter_chapter_models(
 
     main.main(
         template_docx_path=None,
-        project_parts_path=None,
+        project_parts_zip=None,
         table_placeholders_path=None,
         output_path=tmp_path / "out",
         chapter_module_path="x.y",
@@ -176,7 +176,7 @@ def test_main_raises_if_no_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     with pytest.raises(RuntimeError, match="Не нашёл pydantic-моделей"):
         main(
             template_docx_path=None,
-            project_parts_path=None,
+            project_parts_zip=None,
             table_placeholders_path=None,
             output_path=tmp_path / "out",
             chapter_module_path="x.y",

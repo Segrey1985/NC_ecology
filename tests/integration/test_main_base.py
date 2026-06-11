@@ -4,6 +4,7 @@ from pathlib import Path
 
 from main_base import main
 from src.utils.logger import logger
+from tests.conftest import make_project_parts_zip
 
 
 def test_main_base():
@@ -11,11 +12,13 @@ def test_main_base():
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_dir = Path(tmp_dir) / "project1"
         input_dir = base / "src" / "ecology_chapters" / "chapter0"
+        pdfs = sorted((base / "data" / "IN" / "project1" / "trim" / "mini").glob("*.pdf"))
+        assert pdfs, "Ожидался хотя бы 1 pdf для project_parts_zip"
         main(
             template_docx_path=input_dir / "template.docx",
             placeholders_path=input_dir / "placeholders.json",
             table_placeholders_path=input_dir / "table_placeholders.json",
-            project_parts_path=base / "data" / "IN" / "project1" / "trim" / "mini",
+            project_parts_zip=make_project_parts_zip(pdfs),
             output_path=output_dir,
             collection_name="test_data",
             test_mode="on",
@@ -36,11 +39,15 @@ def test_main_base_create_new_uuid_collection_and_delete():
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_dir = Path(tmp_dir) / "project1"
             input_dir = base / "src" / "ecology_chapters" / "chapter0"
+            pdfs = sorted((base / "data" / "IN" / "project1" / "trim" / "mini").glob("*.pdf"))
+            if not pdfs:
+                pdfs = sorted((base / "data" / "IN" / "project1" / "trim").glob("*.pdf"))[:1]
+            assert pdfs, "Ожидался хотя бы 1 pdf для project_parts_zip"
             main(
                 template_docx_path=input_dir / "template.docx",
                 placeholders_path=input_dir / "placeholders.json",
                 table_placeholders_path=input_dir / "table_placeholders.json",
-                project_parts_path=base / "data" / "OUT" / "project1",
+                project_parts_zip=make_project_parts_zip(pdfs),
                 output_path=output_dir,
                 collection_name=collection_name,
                 test_mode="mock",

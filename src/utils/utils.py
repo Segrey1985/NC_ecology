@@ -1,6 +1,7 @@
 import re
 import json
 import glob
+import zipfile
 import pypdf
 import pymupdf
 from io import BytesIO
@@ -28,6 +29,42 @@ UUID4_HEX_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 def is_valid_uuid4_hex(value: str) -> bool:
     return bool(UUID4_HEX_PATTERN.fullmatch(value))
+
+
+def extract_project_parts_pdfs(
+    project_parts_zip: bytes | Path, project_parts_dir: Path
+) -> None:
+    """Рекурсивный сбор pdf файлов и копирование их в project_parts_dir"""
+    
+    if isinstance(project_parts_zip, Path):
+        project_parts_zip_bytes = project_parts_zip.read_bytes()
+    else:
+        project_parts_zip_bytes = project_parts_zip
+
+    project_parts_dir.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(BytesIO(project_parts_zip_bytes)) as zf:
+        zf.extractall(project_parts_dir)
+
+    for path in project_parts_dir.rglob("*"):
+        if path.is_file() and path.suffix.lower() != ".pdf":
+            path.unlink()
+
+    pdfs = sorted(project_parts_dir.rglob("*.pdf"))
+    if not pdfs:
+        raise ValueError("В project_parts_zip не найдено ни одного PDF")
+
+    for idx, pdf_path in enumerate(pdfs, start=1):
+        if pdf_path.parent == project_parts_dir:
+            continue
+        dest = project_parts_dir / pdf_path.name
+        if dest.exists():
+            dest = project_parts_dir / f"{pdf_path.stem}_{idx:04d}.{pdf_path.suffix}"
+        pdf_path.rename(dest)
+
+    for path in sorted(project_parts_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if path.is_dir():
+            path.rmdir()
 
 
 def format_rag_context(chunks: list[str]) -> str:

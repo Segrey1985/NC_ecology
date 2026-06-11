@@ -2,6 +2,7 @@ import json
 import uuid
 import traceback
 import threading
+import tempfile
 from pathlib import Path
 from typing import Literal
 
@@ -21,6 +22,7 @@ from src.utils.logger import (
 from src.utils.utils import (
     print_chunk,
     is_valid_uuid4_hex,
+    extract_project_parts_pdfs,
     iter_models_from_module,
     iter_chapter_models,
     pick_assembly_model,
@@ -113,7 +115,7 @@ def thread_run_graph_for_model(
 
 def main(
     template_docx_path: Path | None,
-    project_parts_path: Path | None,
+    project_parts_zip: bytes | Path | None,
     table_placeholders_path: Path | None,
     output_path: Path,
     chapter_module_path: str,
@@ -126,17 +128,26 @@ def main(
     
     resources: GraphResources | None = None
     output_log_handler_id: int | None = None
+    project_parts_tmp: tempfile.TemporaryDirectory | None = None
     if output_path:
         output_log_handler_id = add_output_log_file(output_path)
-        
+
     try:
+        project_parts_path: Path | None = None
+        if project_parts_zip is not None:
+            project_parts_tmp = tempfile.TemporaryDirectory(prefix="project_parts_")
+            project_parts_path = Path(project_parts_tmp.name)
+            extract_project_parts_pdfs(project_parts_zip, project_parts_path)
+
         chapter_name = chapter_module_path.split('.')[-1]
         runtime_cfg = build_runtime_config(test_mode)
-        
+
         # init graph
 
         graph, resources = init_graph(
-            collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
+            collection_name=collection_name,
+            project_parts_path=project_parts_path,
+            runtime_cfg=runtime_cfg,
         )
 
         total_results: list[dict] = []
@@ -201,10 +212,10 @@ def main(
 
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-            
+
             assembly_module_path = chapter_module_path + ".assembly"
             assembly_model = pick_assembly_model(assembly_module_path)
-        
+
             if test_mode == "filter":
                 data = filter_mode_payload_and_validate(assembly_model, results)
                 data_dict = filter_mode_assembly_to_docx_context(
@@ -215,7 +226,7 @@ def main(
             else:
                 data = assembly_model.model_validate(results)
                 data_dict = data.model_dump(mode="json")
-            
+
             if table_placeholders_path:
                 try:
                     with open(table_placeholders_path, "r", encoding="utf-8") as f:
@@ -224,11 +235,11 @@ def main(
                         data_dict.update(table_placeholders)
                 except Exception:
                     logger.error(traceback.format_exc())
-                    
+
             results_out_path = output_path / f"{chapter_name}_output.json"
             with open(results_out_path, "w", encoding="utf-8") as f:
                 json.dump(data_dict, f, ensure_ascii=False, indent=2)
-                
+
             if template_docx_path:
                 result_template_out_path = (
                     output_path / f"{chapter_module_path.split('.')[-1]}.docx"
@@ -239,6 +250,8 @@ def main(
                     output_docx_path=result_template_out_path,
                 )
     finally:
+        if project_parts_tmp is not None:
+            project_parts_tmp.cleanup()
         if output_log_handler_id is not None:
             logger.remove(output_log_handler_id)
         if "save_db" not in kwargs:
@@ -260,7 +273,7 @@ if __name__ == "__main__":
     base = Path(__file__).parent
     main(
         template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
-        project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\chapter2"),
+        project_parts_zip=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\project_parts.zip"),
         table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\src\ecology_chapters\chapter2\__test_table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
         chapter_module_path="src.ecology_chapters.chapter2",

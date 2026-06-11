@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
 from main import main
 from config.config_file import cfg
+from tests.conftest import make_project_parts_zip
 
 def test_main_test_mode_on_processes_only_first_model_and_cleanup():
     """
@@ -28,19 +28,12 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
 
     with tempfile.TemporaryDirectory(prefix="nc_ecology_main2_it_") as tmp:
         tmp_dir = Path(tmp)
-        
-        parts_dir = tmp_dir / "parts"
-        parts_dir.mkdir(parents=True, exist_ok=True)
-        
-        for pdf in pdfs:
-            shutil.copy2(pdf, parts_dir / pdf.name)
-
         out_dir = tmp_dir / "out"
         out_json = out_dir / "chapter1_output.json"
 
         main(
             template_docx_path=None,
-            project_parts_path=parts_dir,
+            project_parts_zip=make_project_parts_zip(pdfs),
             table_placeholders_path=table_placeholders_path,
             output_path=out_dir,
             chapter_module_path="src.ecology_chapters.chapter1",

@@ -1,6 +1,7 @@
 import json
 import uuid
 import threading
+import tempfile
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -16,7 +17,7 @@ from src.utils.logger import (
     logger_file_format,
     print_and_save_thread_logs,
 )
-from src.utils.utils import print_chunk, is_valid_uuid4_hex
+from src.utils.utils import print_chunk, is_valid_uuid4_hex, extract_project_parts_pdfs
 from src.templates.docx_template_engine import fill_docx_template
 
 
@@ -143,7 +144,7 @@ def main(
     template_docx_path: Path | None,
     placeholders_path: Path,
     table_placeholders_path: Path | None,
-    project_parts_path: Path | None,
+    project_parts_zip: bytes | Path | None,
     output_path: Path | None,
     collection_name: str = "main",
     verbose: bool = True,
@@ -154,20 +155,29 @@ def main(
     
     resources: GraphResources | None = None
     output_log_handler_id: int | None = None
+    project_parts_tmp: tempfile.TemporaryDirectory | None = None
     if output_path:
         output_log_handler_id = add_output_log_file(output_path)
-        
+
     try:
+        project_parts_path: Path | None = None
+        if project_parts_zip is not None:
+            project_parts_tmp = tempfile.TemporaryDirectory(prefix="project_parts_")
+            project_parts_path = Path(project_parts_tmp.name)
+            extract_project_parts_pdfs(project_parts_zip, project_parts_path)
+
         runtime_cfg = build_runtime_config(test_mode)
-        
+
         graph, resources = init_graph(
-            collection_name=collection_name, project_parts_path=project_parts_path, runtime_cfg=runtime_cfg
+            collection_name=collection_name,
+            project_parts_path=project_parts_path,
+            runtime_cfg=runtime_cfg,
         )
-    
+
         placeholders, table_placeholders = _load_placeholders(
             placeholders_path, table_placeholders_path
         )
-    
+
         if test_mode == "mock":
             placeholders_output = json.load(
                 open(
@@ -178,7 +188,7 @@ def main(
         else:
             placeholders_output = {}
             total_results: list[dict] = []
-    
+
             for key, value in table_placeholders.items():
                 placeholders_output[key] = value
 
@@ -207,22 +217,22 @@ def main(
                     total_results.append(dct)
 
             print_and_save_thread_logs(output_path, total_results, "placeholder")
-            
+
             add_auxiliary_placeholders(
                 placeholders_chapter_0=placeholders_output,
                 table_placeholders=table_placeholders,
                 runtime_cfg=runtime_cfg
             )
-            
+
             add_calculated_placeholders(placeholders=placeholders_output)
-    
+
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-    
+
             placeholders_out_path = output_path / "placeholders.json"
             with open(placeholders_out_path, "w", encoding="utf-8") as f:
                 json.dump(placeholders_output, f, ensure_ascii=False, indent=4)
-    
+
             if template_docx_path:
                 result_template_out_path = output_path / "result_template.docx"
                 fill_docx_template(
@@ -234,6 +244,8 @@ def main(
         return placeholders_output
 
     finally:
+        if project_parts_tmp is not None:
+            project_parts_tmp.cleanup()
         if output_log_handler_id is not None:
             logger.remove(output_log_handler_id)
         if "save_db" not in kwargs:
@@ -257,7 +269,7 @@ if __name__ == "__main__":
         template_docx_path=input_dir / "template.docx",
         placeholders_path=input_dir / "placeholders.json",
         table_placeholders_path=input_dir / "table_placeholders.json",
-        project_parts_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\trim"),
+        project_parts_zip=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\project_parts.zip"),
         output_path=base / "data" / "OUT" / "project1",
         collection_name="main_base_test_off_parent",
         test_mode="off",

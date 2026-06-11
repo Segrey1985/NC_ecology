@@ -1,6 +1,5 @@
 import io
 import json
-import shutil
 import tempfile
 import uuid
 import zipfile
@@ -118,30 +117,6 @@ async def resolve_table_placeholders_path(
     return out_path
 
 
-def extract_project_parts_pdfs(
-    project_parts_zip_bytes: bytes, project_parts_dir: Path
-) -> None:
-    project_parts_raw_dir = project_parts_dir.parent / "project_parts_raw"
-    project_parts_raw_dir.mkdir(parents=True, exist_ok=True)
-
-    with zipfile.ZipFile(io.BytesIO(project_parts_zip_bytes)) as zf:
-        zf.extractall(project_parts_raw_dir)
-
-    pdfs = sorted(project_parts_raw_dir.rglob("*.pdf"))
-    if not pdfs:
-        raise HTTPException(
-            status_code=400,
-            detail="В project_parts_zip не найдено ни одного PDF",
-        )
-
-    for idx, pdf_path in enumerate(pdfs, start=1):
-        safe_name = pdf_path.name
-        dest = project_parts_dir / safe_name
-        if dest.exists():
-            dest = project_parts_dir / f"{idx:04d}_{safe_name}"
-        shutil.copy2(pdf_path, dest)
-
-
 def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
     zip_buf = io.BytesIO()
 
@@ -241,12 +216,9 @@ async def generate_chapter(
         elif spec.default_table_placeholders().exists():
             table_placeholders_path = spec.default_table_placeholders()
 
-        project_parts_dir: Path | None = None
+        project_parts_zip_bytes: bytes | None = None
         if project_parts_zip:
-            project_parts_dir = tmp_dir / "project_parts"
-            project_parts_dir.mkdir(parents=True, exist_ok=True)
             project_parts_zip_bytes = await project_parts_zip.read()
-            extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
 
         collection_name = collection_name or uuid.uuid4().hex
 
@@ -254,65 +226,68 @@ async def generate_chapter(
         logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
         logger.info(f"{table_placeholders_path=}")
-        logger.info(f"{project_parts_dir=}")
+        logger.info(f"{project_parts_zip_bytes is not None=}")
         logger.info(f"{collection_name=}")
         logger.info(f"{chapter_module_path=}")
         logger.info(f"{max_workers=}")
         logger.info(f"{output_dir=}")
 
         # --- Запуск пайплайна "base" или "chapter" ---
-        if pipeline == "base":
-            run_main_base(
-                template_docx_path=template_docx_path,
-                placeholders_path=placeholders_path,
-                table_placeholders_path=table_placeholders_path,
-                project_parts_path=project_parts_dir,
-                output_path=output_dir,
-                collection_name=collection_name,
-                verbose=False,
-                test_mode="off",
-            )
-        else:
-            if extract_base:
-                # Шаг 1: извлечь общие плейсхолдеры
-                logger.info("[extract_base] START")
-                base_placeholders: dict = run_main_base(
-                    template_docx_path=CHAPTER0.default_template(),
-                    placeholders_path=CHAPTER0.default_placeholders(),
-                    table_placeholders_path=CHAPTER0.default_table_placeholders(),
-                    project_parts_path=project_parts_dir,
-                    output_path=output_dir / "__debug__" / CHAPTER0.name,
+        try:
+            if pipeline == "base":
+                run_main_base(
+                    template_docx_path=template_docx_path,
+                    placeholders_path=placeholders_path,
+                    table_placeholders_path=table_placeholders_path,
+                    project_parts_zip=project_parts_zip_bytes,
+                    output_path=output_dir,
                     collection_name=collection_name,
                     verbose=False,
                     test_mode="off",
                 )
-                logger.info(f"[extract_base] {base_placeholders.keys()=}")
+            else:
+                if extract_base:
+                    # Шаг 1: извлечь общие плейсхолдеры
+                    logger.info("[extract_base] START")
+                    base_placeholders: dict = run_main_base(
+                        template_docx_path=CHAPTER0.default_template(),
+                        placeholders_path=CHAPTER0.default_placeholders(),
+                        table_placeholders_path=CHAPTER0.default_table_placeholders(),
+                        project_parts_zip=project_parts_zip_bytes,
+                        output_path=output_dir / "__debug__" / CHAPTER0.name,
+                        collection_name=collection_name,
+                        verbose=False,
+                        test_mode="off",
+                    )
+                    logger.info(f"[extract_base] {base_placeholders.keys()=}")
 
-                # Шаг 2: слить base_placeholders с табличными плейсхолдерами главы.
-                # Если table_placeholders_path уже есть — читаем с диска (source_path),
-                # а не из UploadFile
-                table_placeholders_path = await resolve_table_placeholders_path(
-                    None if table_placeholders_path else table_placeholders,
-                    spec,
-                    input_dir,
-                    base_placeholders,
-                    source_path=table_placeholders_path,
+                    # Шаг 2: слить base_placeholders с табличными плейсхолдерами главы.
+                    # Если table_placeholders_path уже есть — читаем с диска (source_path),
+                    # а не из UploadFile
+                    table_placeholders_path = await resolve_table_placeholders_path(
+                        None if table_placeholders_path else table_placeholders,
+                        spec,
+                        input_dir,
+                        base_placeholders,
+                        source_path=table_placeholders_path,
+                    )
+                    logger.info(f"[extract_base] {table_placeholders_path=}")
+                    logger.info("[extract_base] END")
+
+                # Шаг 3 (или единственный шаг без extract_base): генерация главы.
+                run_main(
+                    template_docx_path=template_docx_path,
+                    project_parts_zip=project_parts_zip_bytes,
+                    table_placeholders_path=table_placeholders_path,
+                    output_path=output_dir,
+                    chapter_module_path=chapter_module_path,
+                    collection_name=collection_name,
+                    verbose=False,
+                    test_mode="off",
+                    max_workers=max_workers,
                 )
-                logger.info(f"[extract_base] {table_placeholders_path=}")
-                logger.info("[extract_base] END")
-
-            # Шаг 3 (или единственный шаг без extract_base): генерация главы.
-            run_main(
-                template_docx_path=template_docx_path,
-                project_parts_path=project_parts_dir,
-                table_placeholders_path=table_placeholders_path,
-                output_path=output_dir,
-                chapter_module_path=chapter_module_path,
-                collection_name=collection_name,
-                verbose=False,
-                test_mode="off",
-                max_workers=max_workers,
-            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         return zip_output_dir(output_dir, result_filename)
 
@@ -356,12 +331,9 @@ async def generate_all_chapters(
             input_dir.mkdir(parents=True, exist_ok=True)
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            project_parts_dir: Path | None = None
+            project_parts_zip_bytes: bytes | None = None
             if project_parts_zip:
-                project_parts_dir = tmp_dir / "project_parts"
-                project_parts_dir.mkdir(parents=True, exist_ok=True)
                 project_parts_zip_bytes = await project_parts_zip.read()
-                extract_project_parts_pdfs(project_parts_zip_bytes, project_parts_dir)
 
             placeholders_ch0_path = await resolve_path(
                 placeholders_ch0,
@@ -383,17 +355,20 @@ async def generate_all_chapters(
             ch1_out = output_dir / CHAPTER1.name
             ch2_out = output_dir / CHAPTER2.name
 
-            base_placeholders = run_main_base(
-                template_docx_path=template_ch0_path,
-                placeholders_path=placeholders_ch0_path,
-                table_placeholders_path=table_placeholders_ch0_path,
-                project_parts_path=project_parts_dir,
-                output_path=ch0_out,
-                collection_name=collection_name,
-                verbose=False,
-                test_mode=test_mode,
-                save_db=1,
-            )
+            try:
+                base_placeholders = run_main_base(
+                    template_docx_path=template_ch0_path,
+                    placeholders_path=placeholders_ch0_path,
+                    table_placeholders_path=table_placeholders_ch0_path,
+                    project_parts_zip=project_parts_zip_bytes,
+                    output_path=ch0_out,
+                    collection_name=collection_name,
+                    verbose=False,
+                    test_mode=test_mode,
+                    save_db=1,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
             table_placeholders_ch1_path = await resolve_table_placeholders_path(
                 table_placeholders_ch1,
@@ -422,7 +397,7 @@ async def generate_all_chapters(
             logger.info("\nНАЧИНАЮ ФОРМИРОВАТЬ ГЛАВЫ 1 И 2\n")
 
             common_args = {
-                "project_parts_path": project_parts_dir,
+                "project_parts_zip": project_parts_zip_bytes,
                 "collection_name": collection_name,
                 "verbose": False,
                 "test_mode": test_mode,
@@ -451,7 +426,10 @@ async def generate_all_chapters(
                 ]
 
                 for future in futures:
-                    future.result()
+                    try:
+                        future.result()
+                    except ValueError as exc:
+                        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
             logger.info("\nГЛАВЫ 1 И 2 СФОРМИРОВАНЫ\n")
 
