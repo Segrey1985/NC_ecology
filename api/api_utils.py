@@ -1,7 +1,6 @@
 import io
 import json
 import tempfile
-import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -10,7 +9,6 @@ from typing import Literal
 
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from qdrant_client import QdrantClient
 
 from config.config_file import TestMode, cfg
 from main import main as run_main
@@ -18,6 +16,7 @@ from main_base import main as run_main_base
 from src.utils.logger import logger
 from src.utils.utils import is_valid_uuid4_hex
 from src.utils.validators import validate_docx, validate_json, validate_zip
+from api.zip_collections import get_qdrant_client, resolve_collection_name
 
 ECOLOGY_CHAPTERS_ROOT = Path(__file__).resolve().parent.parent / "src" / "ecology_chapters"
 
@@ -136,7 +135,7 @@ def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
 
 
 def delete_qdrant_collection_if_temp(collection_name: str) -> None:
-    client = QdrantClient(url=cfg.QDRANT_URL)
+    client = get_qdrant_client()
     if client.collection_exists(collection_name) and is_valid_uuid4_hex(collection_name):
         client.delete_collection(collection_name)
         logger.info(
@@ -220,7 +219,12 @@ async def generate_chapter(
         if project_parts_zip:
             project_parts_zip_bytes = await project_parts_zip.read()
 
-        collection_name = collection_name or uuid.uuid4().hex
+        qdrant_client = get_qdrant_client()
+        collection_name = resolve_collection_name(
+            client=qdrant_client,
+            collection_name=collection_name,
+            zip_bytes=project_parts_zip_bytes,
+        )
 
         logger.info(f"{pipeline=}")
         logger.info(f"{template_docx_path=}")
@@ -306,8 +310,8 @@ async def generate_all_chapters(
     template_docx_ch1: UploadFile | None = None,
     template_docx_ch2: UploadFile | None = None,
 ):
-    collection_name = collection_name or uuid.uuid4().hex
     max_workers = CHAPTER1.default_max_workers if max_workers is None else max_workers
+    resolved_collection_name: str | None = None
 
     try:
         if project_parts_zip:
@@ -334,6 +338,13 @@ async def generate_all_chapters(
             project_parts_zip_bytes: bytes | None = None
             if project_parts_zip:
                 project_parts_zip_bytes = await project_parts_zip.read()
+
+            resolved_collection_name = resolve_collection_name(
+                client=get_qdrant_client(),
+                collection_name=collection_name,
+                zip_bytes=project_parts_zip_bytes,
+            )
+            collection_name = resolved_collection_name
 
             placeholders_ch0_path = await resolve_path(
                 placeholders_ch0,
@@ -436,4 +447,5 @@ async def generate_all_chapters(
             return zip_output_dir(output_dir, "all_chapters.zip")
 
     finally:
-        delete_qdrant_collection_if_temp(collection_name)
+        if resolved_collection_name:
+            delete_qdrant_collection_if_temp(resolved_collection_name)
