@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import tempfile
@@ -149,6 +150,40 @@ def delete_qdrant_collection_if_temp(collection_name: str) -> None:
         )
 
 
+def _run_chapters_1_and_2_in_threads(
+    *,
+    template_ch1_path: Path,
+    table_placeholders_ch1_path: Path | None,
+    ch1_out: Path,
+    template_ch2_path: Path,
+    table_placeholders_ch2_path: Path | None,
+    ch2_out: Path,
+    common_args: dict,
+) -> None:
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [
+            pool.submit(
+                run_main,
+                template_docx_path=template_ch1_path,
+                table_placeholders_path=table_placeholders_ch1_path,
+                output_path=ch1_out,
+                chapter_module_path=CHAPTER1.module_path,
+                **common_args,
+            ),
+            pool.submit(
+                run_main,
+                template_docx_path=template_ch2_path,
+                table_placeholders_path=table_placeholders_ch2_path,
+                output_path=ch2_out,
+                chapter_module_path=CHAPTER2.module_path,
+                **common_args,
+            ),
+        ]
+
+        for future in futures:
+            future.result()
+
+
 async def generate_chapter(
     *,
     spec: ChapterSpec,
@@ -240,7 +275,8 @@ async def generate_chapter(
         # --- Запуск пайплайна "base" или "chapter" ---
         try:
             if pipeline == "base":
-                run_main_base(
+                await asyncio.to_thread(
+                    run_main_base,
                     template_docx_path=template_docx_path,
                     placeholders_path=placeholders_path,
                     table_placeholders_path=table_placeholders_path,
@@ -254,7 +290,8 @@ async def generate_chapter(
                 if extract_base:
                     # Шаг 1: извлечь общие плейсхолдеры
                     logger.info("[extract_base] START")
-                    base_placeholders: dict = run_main_base(
+                    base_placeholders: dict = await asyncio.to_thread(
+                        run_main_base,
                         template_docx_path=CHAPTER0.default_template(),
                         placeholders_path=CHAPTER0.default_placeholders(),
                         table_placeholders_path=CHAPTER0.default_table_placeholders(),
@@ -263,7 +300,7 @@ async def generate_chapter(
                         collection_name=collection_name,
                         verbose=False,
                         test_mode="off",
-                        save_db=1
+                        save_db=1,
                     )
                     logger.info(f"[extract_base] {base_placeholders.keys()=}")
                     
@@ -281,7 +318,8 @@ async def generate_chapter(
                     logger.info("[extract_base] END")
                 
                 # Шаг 3 (или единственный шаг без extract_base): генерация главы.
-                run_main(
+                await asyncio.to_thread(
+                    run_main,
                     template_docx_path=template_docx_path,
                     project_parts_zip=project_parts_zip_bytes,
                     table_placeholders_path=table_placeholders_path,
@@ -362,7 +400,8 @@ async def generate_all_chapters(
             ch2_out = output_dir / CHAPTER2.name
             
             try:
-                base_placeholders = run_main_base(
+                base_placeholders = await asyncio.to_thread(
+                    run_main_base,
                     template_docx_path=template_ch0_path,
                     placeholders_path=placeholders_ch0_path,
                     table_placeholders_path=table_placeholders_ch0_path,
@@ -411,31 +450,19 @@ async def generate_all_chapters(
                 "save_db": 1,
             }
             
-            with ThreadPoolExecutor(max_workers=4) as pool:
-                futures = [
-                    pool.submit(
-                        run_main,
-                        template_docx_path=template_ch1_path,
-                        table_placeholders_path=table_placeholders_ch1_path,
-                        output_path=ch1_out,
-                        chapter_module_path=CHAPTER1.module_path,
-                        **common_args,
-                    ),
-                    pool.submit(
-                        run_main,
-                        template_docx_path=template_ch2_path,
-                        table_placeholders_path=table_placeholders_ch2_path,
-                        output_path=ch2_out,
-                        chapter_module_path=CHAPTER2.module_path,
-                        **common_args,
-                    ),
-                ]
-                
-                for future in futures:
-                    try:
-                        future.result()
-                    except ValueError as exc:
-                        raise HTTPException(status_code=400, detail=str(exc)) from exc
+            try:
+                await asyncio.to_thread(
+                    _run_chapters_1_and_2_in_threads,
+                    template_ch1_path=template_ch1_path,
+                    table_placeholders_ch1_path=table_placeholders_ch1_path,
+                    ch1_out=ch1_out,
+                    template_ch2_path=template_ch2_path,
+                    table_placeholders_ch2_path=table_placeholders_ch2_path,
+                    ch2_out=ch2_out,
+                    common_args=common_args,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             
             logger.info("\nГЛАВЫ 1 И 2 СФОРМИРОВАНЫ\n")
             
