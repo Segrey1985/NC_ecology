@@ -1,6 +1,7 @@
 import io
 import json
 import tempfile
+import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Literal
 
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from qdrant_client import QdrantClient
 
 from config.config_file import TestMode, cfg
 from main import main as run_main
@@ -16,7 +18,7 @@ from main_base import main as run_main_base
 from src.utils.logger import logger
 from src.utils.utils import is_valid_uuid4_hex
 from src.utils.validators import validate_docx, validate_json, validate_zip
-from api.zip_collections import get_qdrant_client, resolve_collection_name
+
 
 ECOLOGY_CHAPTERS_ROOT = Path(__file__).resolve().parent.parent / "src" / "ecology_chapters"
 
@@ -29,17 +31,21 @@ class ChapterSpec:
     result_filename: str = "result.zip"
     default_max_workers: int = 8
     default_extract_base: bool = True
-
+    
+    
     @property
     def directory(self) -> Path:
         return ECOLOGY_CHAPTERS_ROOT / self.name
-
+    
+    
     def default_placeholders(self) -> Path:
         return self.directory / "placeholders.json"
-
+    
+    
     def default_template(self) -> Path:
         return self.directory / "template.docx"
-
+    
+    
     def default_table_placeholders(self) -> Path:
         return self.directory / "table_placeholders.json"
 
@@ -101,13 +107,13 @@ async def resolve_table_placeholders_path(
             data = json.loads(default_path.read_text(encoding="utf-8"))
         else:
             data = {}
-
+    
     if base_placeholders:
         data.update(base_placeholders)
-
+    
     if not data:
         return None
-
+    
     out_path = input_dir / f"{spec.name}_table_placeholders.json"
     out_path.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
@@ -118,15 +124,15 @@ async def resolve_table_placeholders_path(
 
 def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
     zip_buf = io.BytesIO()
-
+    
     with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for file_path in output_dir.rglob("*"):
             if file_path.is_file():
                 arc_name = file_path.relative_to(output_dir)
                 zf.write(file_path, arcname=arc_name)
-
+    
     zip_buf.seek(0)
-
+    
     return StreamingResponse(
         zip_buf,
         media_type="application/zip",
@@ -135,7 +141,7 @@ def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
 
 
 def delete_qdrant_collection_if_temp(collection_name: str) -> None:
-    client = get_qdrant_client()
+    client = QdrantClient(url=cfg.QDRANT_URL)
     if client.collection_exists(collection_name) and is_valid_uuid4_hex(collection_name):
         client.delete_collection(collection_name)
         logger.info(
@@ -159,7 +165,7 @@ async def generate_chapter(
     result_filename = spec.result_filename
     max_workers = spec.default_max_workers if max_workers is None else max_workers
     extract_base = spec.default_extract_base if extract_base is None else extract_base
-
+    
     # Валидация загруженных файлов до создания временной директории.
     if placeholders:
         await validate_json(placeholders)
@@ -169,17 +175,17 @@ async def generate_chapter(
         await validate_json(table_placeholders)
     if project_parts_zip:
         await validate_zip(project_parts_zip)
-
+    
     with tempfile.TemporaryDirectory(prefix="nc_ecology_") as tmp:
         tmp_dir = Path(tmp)
         input_dir = tmp_dir / "in"
         output_dir = tmp_dir / "out"
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-
+        
         # --- Разрешение путей к входным файлам ---
         # resolve_path: upload → запись во временный файл, иначе — дефолт из spec.
-
+        
         placeholders_path: Path | None = None
         if pipeline == "base":
             placeholders_path = await resolve_path(
@@ -192,7 +198,7 @@ async def generate_chapter(
                     status_code=400,
                     detail="Не заданы placeholders и отсутствует файл по умолчанию",
                 )
-
+        
         template_docx_path = await resolve_path(
             template_docx,
             spec.default_template(),
@@ -203,7 +209,7 @@ async def generate_chapter(
                 status_code=400,
                 detail="Не задан template_docx и отсутствует файл по умолчанию",
             )
-
+        
         table_placeholders_path: Path | None = None
         if table_placeholders:
             # Upload уже прочитан здесь — повторно читать UploadFile нельзя.
@@ -214,18 +220,13 @@ async def generate_chapter(
             )
         elif spec.default_table_placeholders().exists():
             table_placeholders_path = spec.default_table_placeholders()
-
+        
         project_parts_zip_bytes: bytes | None = None
         if project_parts_zip:
             project_parts_zip_bytes = await project_parts_zip.read()
-
-        qdrant_client = get_qdrant_client()
-        collection_name = resolve_collection_name(
-            client=qdrant_client,
-            collection_name=collection_name,
-            zip_bytes=project_parts_zip_bytes,
-        )
-
+        
+        collection_name = collection_name or uuid.uuid4().hex
+        
         logger.info(f"{pipeline=}")
         logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
@@ -235,7 +236,7 @@ async def generate_chapter(
         logger.info(f"{chapter_module_path=}")
         logger.info(f"{max_workers=}")
         logger.info(f"{output_dir=}")
-
+        
         # --- Запуск пайплайна "base" или "chapter" ---
         try:
             if pipeline == "base":
@@ -262,9 +263,10 @@ async def generate_chapter(
                         collection_name=collection_name,
                         verbose=False,
                         test_mode="off",
+                        save_db=1
                     )
                     logger.info(f"[extract_base] {base_placeholders.keys()=}")
-
+                    
                     # Шаг 2: слить base_placeholders с табличными плейсхолдерами главы.
                     # Если table_placeholders_path уже есть — читаем с диска (source_path),
                     # а не из UploadFile
@@ -277,7 +279,7 @@ async def generate_chapter(
                     )
                     logger.info(f"[extract_base] {table_placeholders_path=}")
                     logger.info("[extract_base] END")
-
+                
                 # Шаг 3 (или единственный шаг без extract_base): генерация главы.
                 run_main(
                     template_docx_path=template_docx_path,
@@ -292,7 +294,7 @@ async def generate_chapter(
                 )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        
         return zip_output_dir(output_dir, result_filename)
 
 
@@ -310,42 +312,35 @@ async def generate_all_chapters(
     template_docx_ch1: UploadFile | None = None,
     template_docx_ch2: UploadFile | None = None,
 ):
+    collection_name = collection_name or uuid.uuid4().hex
     max_workers = CHAPTER1.default_max_workers if max_workers is None else max_workers
-    resolved_collection_name: str | None = None
-
+    
     try:
         if project_parts_zip:
             await validate_zip(project_parts_zip)
         for upload, validator in (
-            (placeholders_ch0, validate_json),
-            (table_placeholders_ch0, validate_json),
-            (table_placeholders_ch1, validate_json),
-            (table_placeholders_ch2, validate_json),
-            (template_docx_ch0, validate_docx),
-            (template_docx_ch1, validate_docx),
-            (template_docx_ch2, validate_docx),
+                (placeholders_ch0, validate_json),
+                (table_placeholders_ch0, validate_json),
+                (table_placeholders_ch1, validate_json),
+                (table_placeholders_ch2, validate_json),
+                (template_docx_ch0, validate_docx),
+                (template_docx_ch1, validate_docx),
+                (template_docx_ch2, validate_docx),
         ):
             if upload:
                 await validator(upload)
-
+        
         with tempfile.TemporaryDirectory(prefix="nc_ecology_all_") as tmp:
             tmp_dir = Path(tmp)
             input_dir = tmp_dir / "in"
             output_dir = tmp_dir / "out"
             input_dir.mkdir(parents=True, exist_ok=True)
             output_dir.mkdir(parents=True, exist_ok=True)
-
+            
             project_parts_zip_bytes: bytes | None = None
             if project_parts_zip:
                 project_parts_zip_bytes = await project_parts_zip.read()
-
-            resolved_collection_name = resolve_collection_name(
-                client=get_qdrant_client(),
-                collection_name=collection_name,
-                zip_bytes=project_parts_zip_bytes,
-            )
-            collection_name = resolved_collection_name
-
+            
             placeholders_ch0_path = await resolve_path(
                 placeholders_ch0,
                 CHAPTER0.default_placeholders(),
@@ -361,11 +356,11 @@ async def generate_all_chapters(
                 CHAPTER0.default_template(),
                 input_dir / "chapter0_template.docx",
             )
-
+            
             ch0_out = output_dir / CHAPTER0.name
             ch1_out = output_dir / CHAPTER1.name
             ch2_out = output_dir / CHAPTER2.name
-
+            
             try:
                 base_placeholders = run_main_base(
                     template_docx_path=template_ch0_path,
@@ -380,7 +375,7 @@ async def generate_all_chapters(
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+            
             table_placeholders_ch1_path = await resolve_table_placeholders_path(
                 table_placeholders_ch1,
                 CHAPTER1,
@@ -393,7 +388,7 @@ async def generate_all_chapters(
                 input_dir,
                 base_placeholders,
             )
-
+            
             template_ch1_path = await resolve_path(
                 template_docx_ch1,
                 CHAPTER1.default_template(),
@@ -404,9 +399,9 @@ async def generate_all_chapters(
                 CHAPTER2.default_template(),
                 input_dir / "chapter2_template.docx",
             )
-
+            
             logger.info("\nНАЧИНАЮ ФОРМИРОВАТЬ ГЛАВЫ 1 И 2\n")
-
+            
             common_args = {
                 "project_parts_zip": project_parts_zip_bytes,
                 "collection_name": collection_name,
@@ -415,7 +410,7 @@ async def generate_all_chapters(
                 "max_workers": max_workers,
                 "save_db": 1,
             }
-
+            
             with ThreadPoolExecutor(max_workers=4) as pool:
                 futures = [
                     pool.submit(
@@ -435,17 +430,16 @@ async def generate_all_chapters(
                         **common_args,
                     ),
                 ]
-
+                
                 for future in futures:
                     try:
                         future.result()
                     except ValueError as exc:
                         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+            
             logger.info("\nГЛАВЫ 1 И 2 СФОРМИРОВАНЫ\n")
-
+            
             return zip_output_dir(output_dir, "all_chapters.zip")
-
+    
     finally:
-        if resolved_collection_name:
-            delete_qdrant_collection_if_temp(resolved_collection_name)
+        delete_qdrant_collection_if_temp(collection_name)

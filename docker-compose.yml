@@ -16,6 +16,7 @@ services:
       QDRANT_URL: "http://qdrant:6333"
       EMBEDDINGS_LOCAL: "false"
       USE_LANGFUSE: "false"
+      TZ: Europe/Moscow
     env_file:
       - .env
     volumes:
@@ -23,28 +24,6 @@ services:
     ports:
       - "8000:8000"
     gpus: all
-    restart: unless-stopped
-
-  streamlit:
-    image: ecology-app-cuda
-    depends_on:
-      - app
-    environment:
-      API_BASE_URL: "http://app:8000"
-    ports:
-      - "8501:8501"
-    command:
-      [
-        "python",
-        "-m",
-        "streamlit",
-        "run",
-        "api/streamlit_app.py",
-        "--server.address",
-        "0.0.0.0",
-        "--server.port",
-        "8501",
-      ]
     restart: unless-stopped
 
 volumes:

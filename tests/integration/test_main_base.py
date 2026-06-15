@@ -20,7 +20,7 @@ def test_main_base():
             table_placeholders_path=input_dir / "table_placeholders.json",
             project_parts_zip=make_project_parts_zip(pdfs),
             output_path=output_dir,
-            collection_name="test_data",
+            collection_name="test",
             test_mode="on",
         )
 

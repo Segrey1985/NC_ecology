@@ -12,7 +12,7 @@ def test_qdrant_service():
     project_part.make_chunks()
 
     qdrant_service = build_qdrant_service(runtime_cfg=build_runtime_config('on'))
-    COLLECTION_NAME = "test_data"
+    COLLECTION_NAME = "test"
     qdrant_service.create_collection(collection_name=COLLECTION_NAME)
 
     points = qdrant_service.calculate_points(project_part)
