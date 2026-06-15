@@ -8,8 +8,10 @@ from api.api_utils import (
     generate_all_chapters,
     generate_chapter,
 )
+from api.session_middleware import add_session_middleware
 
 app = FastAPI(title="NC_ecology API", version="0.1.0")
+add_session_middleware(app)
 
 
 @app.get(
