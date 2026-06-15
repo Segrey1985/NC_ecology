@@ -11,8 +11,14 @@ from api.api_utils import (
     generate_chapter,
 )
 from api.session_middleware import add_session_middleware
+from api.concurrency_middleware import add_concurrency_middleware
 
 app = FastAPI(title="NC_ecology API", version="0.1.0")
+
+# потом по куки блокируем
+add_concurrency_middleware(app)
+
+# сначала назначаем куки
 add_session_middleware(app)
 
 
