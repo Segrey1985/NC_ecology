@@ -7,6 +7,7 @@ from api.api_utils import (
     CHAPTER0,
     CHAPTER1,
     CHAPTER2,
+    CHAPTER6,
     generate_all_chapters,
     generate_chapter,
 )
@@ -135,6 +136,45 @@ async def chapter2(
 ):
     return await generate_chapter(
         spec=CHAPTER2,
+        template_docx=template_docx,
+        table_placeholders=table_placeholders,
+        project_parts_zip=project_parts_zip,
+        collection_name=collection_name,
+        max_workers=max_workers,
+        extract_base=extract_base,
+    )
+
+
+@app.post(
+    "/chapter6",
+    summary="Глава 6. ВОЗДЕЙСТВИЕ НА РАСТИТЕЛЬНЫЙ И ЖИВОТНЫЙ МИР",
+    description="Эндпоинт используется для генерации главы 'ВОЗДЕЙСТВИЕ НА РАСТИТЕЛЬНЫЙ И ЖИВОТНЫЙ МИР'",
+    tags=["Generation"],
+)
+async def chapter6(
+    project_parts_zip: UploadFile | None = File(
+        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+    ),
+    table_placeholders: UploadFile | None = File(
+        None,
+        description="[### для отладки ###] JSON с табличными плейсхолдерами (по умолчанию из src/ecology_chapters/chapter6)",
+    ),
+    template_docx: UploadFile | None = File(
+        None,
+        description="[### для отладки ###] DOCX шаблон для сборки (по умолчанию из src/ecology_chapters/chapter6)",
+    ),
+    max_workers: int | None = Form(
+        CHAPTER6.default_max_workers,
+        description="[### для отладки ###] Число потоков для параллельного запуска моделей",
+    ),
+    collection_name: str | None = Form(None, description="[### для отладки ###] Имя коллекции"),
+    extract_base: bool = Form(
+        default=CHAPTER2.default_extract_base,
+        description="[### для отладки ###] Извлекать базовую информацию",
+    ),
+):
+    return await generate_chapter(
+        spec=CHAPTER6,
         template_docx=template_docx,
         table_placeholders=table_placeholders,
         project_parts_zip=project_parts_zip,

@@ -68,6 +68,12 @@ CHAPTER2 = ChapterSpec(
     module_path="src.ecology_chapters.chapter2",
     result_filename="chapter2.zip",
 )
+CHAPTER6 = ChapterSpec(
+    name="chapter6",
+    pipeline="chapter",
+    module_path="src.ecology_chapters.chapter6",
+    result_filename="chapter6.zip",
+)
 ALL_CHAPTER_SPECS = (CHAPTER0, CHAPTER1, CHAPTER2)
 
 
