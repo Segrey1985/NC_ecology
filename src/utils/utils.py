@@ -85,8 +85,9 @@ def get_part_names_for_model(model: Type[BaseModel] | None) -> list[str] | None:
     """
     if model is None:
         return None
-    part_names = model.__private_attributes__.get("_part_name", None).default
-    return part_names
+    if part_names := model.__private_attributes__.get("_part_name", None):
+        return part_names.default
+    return None
 
 
 # ___ PDF ___
