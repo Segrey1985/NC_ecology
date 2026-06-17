@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from operator import add
 from dataclasses import dataclass
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field
 from typing import Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,6 +12,12 @@ from langchain_core.language_models import BaseChatModel
 
 from config.config_file import cfg, Config
 from src.llm import LlmModel
+from src.agents.utils import (
+    merge_unique_chunks,
+    get_output_model,
+    get_chapter_module_path,
+    select_generation_model
+)
 from src.retrieval.qdrant import (
     QdrantService,
     build_qdrant_service,
@@ -33,10 +39,6 @@ from src.utils.utils import get_part_names_for_model
 
 MAX_ATTEMPTS = 3
 N_PROMPTS = 2
-
-
-def merge_unique_chunks(left: list[str], right: list[str]) -> list[str]:
-    return list(dict.fromkeys(left + right))
 
 
 @dataclass(frozen=True)
@@ -184,56 +186,6 @@ class RetrievalPrompts(BaseModel):
     )
 
 
-def _get_output_model(config: RunnableConfig) -> type[BaseModel]:
-    output_model = config.get("configurable", {}).get("output_model")
-    if output_model is None:
-        raise ValueError("RunnableConfig.configurable.output_model не передан.")
-    return output_model
-
-
-def _get_chapter_module_path(config: RunnableConfig) -> str:
-    pth = config.get("metadata", {}).get("chapter_module_path")
-    if not pth:
-        raise RuntimeError("В config['metadata'] отсутствует ключ chapter_module_path.")
-    return pth
-
-
-def _build_partial_output_model(
-    output_model: type[BaseModel],
-    field_names: list[str],
-) -> type[BaseModel]:
-    """Подмодель только с полями, которые нужно перегенерировать."""
-    
-    field_definitions = {}
-    for name in field_names:
-        if name in output_model.model_fields:
-            value_type = output_model.model_fields[name].annotation
-            value_field = output_model.model_fields[name]
-            field_definitions[name] = (value_type, value_field)
-    
-    return create_model(
-        f"{output_model.__name__}Partial",
-        __config__=output_model.model_config,
-        **field_definitions,
-    )
-
-
-def _select_generation_model(
-    output_model: type[BaseModel],
-    previous_answer: str | None,
-    fields_to_rewrite: list[str],
-) -> type[BaseModel]:
-    """Полная схема при первом проходе; при rewrite — только поля из fields_to_rewrite."""
-    if not previous_answer:
-        return output_model
-
-    valid_fields = [field for field in fields_to_rewrite if field in output_model.model_fields]
-    if not valid_fields:
-        return output_model
-
-    return _build_partial_output_model(output_model, valid_fields)
-
-
 def generate_retrieval_prompts_node(
     state: Agent2State, resources: GraphResources
 ) -> Agent2State:
@@ -306,7 +258,7 @@ def rag_search_node(
     rag_prompts = state["rag_prompts"]
     reranker_prompts = state["reranker_prompts"]
     chunks = _rag_search_and_rerank(
-        resources, rag_prompts, reranker_prompts, _get_output_model(config), _get_chapter_module_path(config)
+        resources, rag_prompts, reranker_prompts, get_output_model(config), get_chapter_module_path(config)
     )
     logger.info(
         f"[agent_2] RAG search completed "
@@ -347,10 +299,10 @@ def answer_node(
     input_query = state["input_query"]
     chunks = state["chunks"]
     rag_context = format_rag_context(chunks)
-    default_output_model = _get_output_model(config)
+    default_output_model = get_output_model(config)
     previous_answer = state.get("answer")
     fields_to_rewrite = state.get("fields_to_rewrite", [])
-    output_model = _select_generation_model(
+    output_model = select_generation_model(
         default_output_model, previous_answer, fields_to_rewrite
     )
 
@@ -456,7 +408,7 @@ def check_node(
     rag_contexts = format_rag_context(state["chunks_all"])
     answer = state["answer"]
     
-    output_model = _get_output_model(config)
+    output_model = get_output_model(config)
     
     # все поля схемы
     schema_field_names = list(output_model.model_fields.keys())
