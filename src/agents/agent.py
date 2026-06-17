@@ -35,6 +35,10 @@ MAX_ATTEMPTS = 3
 N_PROMPTS = 2
 
 
+def merge_unique_chunks(left: list[str], right: list[str]) -> list[str]:
+    return list(dict.fromkeys(left + right))
+
+
 @dataclass(frozen=True)
 class GraphResources:
     """Ресурсы экземпляра графа"""
@@ -50,8 +54,8 @@ class Agent2State(TypedDict):
 
     # rag
     rag_prompts: list[str]
-    rag_context: str
-    rag_contexts: Annotated[list[str], add]
+    chunks: list[str]
+    chunks_all: Annotated[list[str], merge_unique_chunks]
     reranker_prompts: list[str]
 
     # agent_node
@@ -268,12 +272,11 @@ def rag_search_node(
     chunks = _rag_search_and_rerank(
         resources, rag_prompts, reranker_prompts, _get_output_model(config), _get_chapter_module_path(config)
     )
-    rag_context = format_rag_context(chunks)
     logger.info(
         f"[agent_2] RAG search completed "
         f"(rag_prompts={len(rag_prompts)}, reranker_prompts={len(reranker_prompts)})"
     )
-    return {"rag_context": rag_context}
+    return {"chunks": chunks}
 
 
 def answer_node(
@@ -306,7 +309,8 @@ def answer_node(
 
     llm = resources.llm
     input_query = state["input_query"]
-    rag_context = state["rag_context"]
+    chunks = state["chunks"]
+    rag_context = format_rag_context(chunks)
     output_model = _get_output_model(config)
     previous_answer = state.get("answer")
     fields_to_rewrite = state.get("fields_to_rewrite", [])
@@ -336,7 +340,7 @@ def answer_node(
         updated_answer = update_previous_answer_with_new_answer(
             previous_answer, new_answer, fields_to_rewrite
         )
-        return {"answer": updated_answer, "rag_contexts": [rag_context]}
+        return {"answer": updated_answer, "chunks_all": chunks}
     
     except Exception:
         # structured_output может падать на несовпадении типов (pydantic ValidationError).
@@ -373,13 +377,13 @@ def answer_node(
             updated_answer = update_previous_answer_with_new_answer(
                 previous_answer, new_answer, fields_to_rewrite
             )
-            return {"answer": updated_answer, "rag_contexts": [rag_context]}
+            return {"answer": updated_answer, "chunks_all": chunks}
         except Exception:
             logger.exception(
                 "Structured output validation failed in answer_node in fallback №1. "
                 "Doing fallback №2 and return empty dict"
             )
-            return {"answer": "{}", "rag_contexts": [rag_context]}
+            return {"answer": "{}", "chunks_all": chunks}
 
 
 class AnswerCheck(BaseModel):
@@ -410,7 +414,7 @@ def check_node(
 ) -> Agent2State:
     llm = resources.llm
     input_query = state["input_query"]
-    rag_contexts = state["rag_contexts"]
+    rag_contexts = format_rag_context(state["chunks_all"])
     answer = state["answer"]
     
     output_model = _get_output_model(config)
@@ -448,7 +452,7 @@ def check_node(
                 f"Задача (что нужно извлечь):\n{input_query}\n\n"
                 f"__поля_требующие_проверки__: {_fields_need_to_check}\n\n"
                 f"Допустимые поля схемы: {schema_field_names}\n\n"
-                f"RAG-контекст:\n{'\n'.join(rag_contexts)}\n\n"
+                f"RAG-контекст:\n{rag_contexts}\n\n"
                 f"Ответ (JSON):\n{answer}"
             )
         ),
