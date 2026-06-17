@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from operator import add
 from dataclasses import dataclass
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from typing import Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -198,6 +198,42 @@ def _get_chapter_module_path(config: RunnableConfig) -> str:
     return pth
 
 
+def _build_partial_output_model(
+    output_model: type[BaseModel],
+    field_names: list[str],
+) -> type[BaseModel]:
+    """Подмодель только с полями, которые нужно перегенерировать."""
+    
+    field_definitions = {}
+    for name in field_names:
+        if name in output_model.model_fields:
+            value_type = output_model.model_fields[name].annotation
+            value_field = output_model.model_fields[name]
+            field_definitions[name] = (value_type, value_field)
+    
+    return create_model(
+        f"{output_model.__name__}Partial",
+        __config__=output_model.model_config,
+        **field_definitions,
+    )
+
+
+def _select_generation_model(
+    output_model: type[BaseModel],
+    previous_answer: str | None,
+    fields_to_rewrite: list[str],
+) -> type[BaseModel]:
+    """Полная схема при первом проходе; при rewrite — только поля из fields_to_rewrite."""
+    if not previous_answer:
+        return output_model
+
+    valid_fields = [field for field in fields_to_rewrite if field in output_model.model_fields]
+    if not valid_fields:
+        return output_model
+
+    return _build_partial_output_model(output_model, valid_fields)
+
+
 def generate_retrieval_prompts_node(
     state: Agent2State, resources: GraphResources
 ) -> Agent2State:
@@ -311,9 +347,12 @@ def answer_node(
     input_query = state["input_query"]
     chunks = state["chunks"]
     rag_context = format_rag_context(chunks)
-    output_model = _get_output_model(config)
+    default_output_model = _get_output_model(config)
     previous_answer = state.get("answer")
     fields_to_rewrite = state.get("fields_to_rewrite", [])
+    output_model = _select_generation_model(
+        default_output_model, previous_answer, fields_to_rewrite
+    )
 
     system_message = SystemMessage(
         "Ты помощник по извлечению данных по строительному проекту.\n"
