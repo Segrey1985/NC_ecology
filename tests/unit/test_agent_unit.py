@@ -43,20 +43,19 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
     captured: dict[str, object] = {}
 
     def fake_search(_resources, rp: list[str], rr: list[str], _m, _path: str):
-        captured["rag_prompts"] = rp
+        captured["chunks_all"] = rp
         captured["reranker_prompts"] = rr
         return ["c1", "c2"]
 
     monkeypatch.setattr(agent, "_rag_search_and_rerank", fake_search)
-    monkeypatch.setattr(agent, "format_rag_context", lambda chunks: "CTX:" + "|".join(chunks))
 
     out = agent.rag_search_node(
         {
             "input_query": "hello",
             "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
             "reranker_prompts": ["rerank query", "rerank query 2", "rerank query 3"],
-            "rag_context": "",
-            "rag_contexts": [],
+            "chunks": [""],
+            "chunks_all": [],
             "answer": "",
             "check_decision": "OK",
             "check_reason": "",
@@ -68,10 +67,9 @@ def test_rag_search_node_uses_rag_and_reranker_prompts(monkeypatch: pytest.Monke
     )
     
     assert captured == {
-        "rag_prompts": ["dense query", "dense query 2", "dense query 3"],
+        "chunks_all": ["dense query", "dense query 2", "dense query 3"],
         "reranker_prompts": ["rerank query", "rerank query 2", "rerank query 3"],
     }
-    assert out["rag_context"] == "CTX:c1|c2"
 
 
 def test_generate_retrieval_prompts_node(monkeypatch: pytest.MonkeyPatch):
@@ -228,8 +226,8 @@ def test_answer_node_happy_path(monkeypatch: pytest.MonkeyPatch):
             "input_query": "prompt",
             "rag_prompts": [],
             "reranker_prompts": [],
-            "rag_context": "ctx",
-            "rag_contexts": ["ctx1", "ctx2"],
+            "chunks": ["ctx"],
+            "chunks_all": ["ctx1", "ctx2"],
             "answer": "",
             "check_decision": "OK",
             "check_reason": "",
@@ -269,8 +267,8 @@ def test_answer_node_fallback1_uses_validate_and_dump(monkeypatch: pytest.Monkey
             "input_query": "prompt",
             "rag_prompts": [],
             "reranker_prompts": [],
-            "rag_context": "ctx",
-            "rag_contexts": ["ctx1", "ctx2"],
+            "chunks": ["ctx"],
+            "chunks_all": ["ctx1", "ctx2"],
             "answer": "",
             "check_decision": "OK",
             "check_reason": "",
@@ -305,8 +303,8 @@ def test_answer_node_fallback2_returns_empty_dict_json(monkeypatch: pytest.Monke
             "input_query": "prompt",
             "rag_prompts": [],
             "reranker_prompts": [],
-            "rag_context": "ctx",
-            "rag_contexts": ["ctx1", "ctx2"],
+            "chunks": ["ctx"],
+            "chunks_all": ["ctx1", "ctx2"],
             "answer": "",
             "check_decision": "OK",
             "check_reason": "",
@@ -326,12 +324,15 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
         x: list
         y: str
 
+    captured_model: dict[str, object] = {}
+
     class FakeStructured:
         def invoke(self, _messages):
             return Out(x=['5'], y="")
 
     class FakeLLM:
-        def with_structured_output(self, _model, strict: bool = True):
+        def with_structured_output(self, model, strict: bool = True):
+            captured_model["model"] = model
             return FakeStructured()
 
     out = agent.answer_node(
@@ -339,8 +340,8 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
             "input_query": "prompt",
             "rag_prompts": [],
             "reranker_prompts": [],
-            "rag_context": "ctx",
-            "rag_contexts": ["ctx1", "ctx2"],
+            "chunks": ["ctx"],
+            "chunks_all": ["ctx1", "ctx2"],
             "answer": '{"x":[],"y":"keep"}',
             "fields_to_rewrite": ["x"],
             "verified_fields": ["y"],
@@ -355,6 +356,31 @@ def test_answer_node_postprocess_fills_from_merged(monkeypatch: pytest.MonkeyPat
     data = json.loads(out["answer"])
     assert data["x"] == ['5']
     assert data["y"] == "keep"
+    assert captured_model["model"].__name__ == "OutPartial"
+    assert list(captured_model["model"].model_fields.keys()) == ["x"]
+
+
+def test_select_generation_model_uses_full_schema_on_first_pass():
+    import src.agents.agent as agent
+
+    class Out(BaseModel):
+        x: int
+        y: str
+
+    assert agent.select_generation_model(Out, None, ["x"]) is Out
+    assert agent.select_generation_model(Out, '{"x":1,"y":"a"}', []) is Out
+
+
+def test_select_generation_model_builds_partial_on_rewrite():
+    import src.agents.agent as agent
+
+    class Out(BaseModel):
+        x: int
+        y: str
+
+    partial = agent.select_generation_model(Out, '{"x":1,"y":"a"}', ["x"])
+    assert partial.__name__ == "OutPartial"
+    assert list(partial.model_fields.keys()) == ["x"]
 
 
 def test_route_after_check_limits_rewrites():

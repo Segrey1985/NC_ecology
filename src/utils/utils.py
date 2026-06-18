@@ -6,19 +6,13 @@ import pypdf
 import pymupdf
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional, get_args, get_origin, Type
+from typing import Any, Optional, Type, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.alias_generators import to_pascal
 from pdfminer.layout import LTTextBox, LTTextLine, LTTextContainer
 from pdfminer.high_level import extract_pages as extract_pages_miner
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-    AIMessage,
-    ToolMessage,
-    BaseMessage,
-)
+from langchain_core.messages import AIMessage
 
 from src.utils.logger import logger
 
@@ -476,6 +470,11 @@ def iter_models_from_module(module_path: str) -> list[type[BaseModel]]:
     return out
 
 
+# ___ ASSEMBLY MODELS ___
+
+FIELD_TO_MODEL_ATTR = "__field_to_model__"
+
+
 def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
     """
     Достаём единственную корневую модель сборки из `<chapter>.assembly`.
@@ -502,20 +501,34 @@ def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
     return candidates[0]
 
 
+def _field_to_model(assembly_model: type[BaseModel]) -> dict[str, type[BaseModel]]:
+    """Возвращает поле __field_to_model__ модели"""
+    
+    mapping = getattr(assembly_model, FIELD_TO_MODEL_ATTR, None)
+    if mapping is None:
+        raise RuntimeError(
+            f"У `{assembly_model.__name__}` нет `{FIELD_TO_MODEL_ATTR}`. "
+            f"Соберите через `build_chapter_assembly_model`."
+        )
+    return mapping
+
+
 def build_chapter_assembly_model(
     models_module_path: str,
     *,
     model_name: str = "ChapterData",
 ) -> type[BaseModel]:
-    """
-    Собирает корневую pydantic-модель главы из всех моделей в `*.models`.
-    Поля опциональны — можно валидировать и рендерить docx по частичному JSON.
-    """
-    field_defs: dict[str, tuple[Any, None]] = {}
+    """Собирает assembly_model из всех моделей главы в `*.models.py`"""
+    
+    field_to_model: dict[str, type[BaseModel]] = {}  # {"architecture": Architecture, "land_plot": LandPlot, ...}
+    field_defs: dict[str, tuple[Any, None]] = {}  # {architecture: Architecture | None = None, ...}
+    
     for model_cls in iter_models_from_module(models_module_path):
-        field_defs[pascal_to_snake(model_cls.__name__)] = (model_cls | None, None)
+        _field_name_ = pascal_to_snake(model_cls.__name__)
+        field_to_model[_field_name_] = model_cls
+        field_defs[_field_name_] = (model_cls | None, None)
 
-    return create_model(
+    model = create_model(
         model_name,
         __config__=ConfigDict(
             alias_generator=to_pascal,
@@ -523,6 +536,8 @@ def build_chapter_assembly_model(
         ),
         **field_defs,
     )
+    setattr(model, FIELD_TO_MODEL_ATTR, field_to_model)
+    return model
 
 
 def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
@@ -552,105 +567,74 @@ def iter_chapter_models(chapter_module_path: str) -> list[type[BaseModel]]:
     )
 
 
-# ___ filter_mode ___
+# ___ ASSEMBLY MODELS >>> DOCX ___
 
 
-def _list_item_type(annotation: Any) -> Any | None:
+def _is_list_field(annotation: Any) -> bool:
+    """
+    annotation              # list[str, int]
+    get_origin(annotation)  # <class 'list'>
+    get_args(annotation)    # (<class 'str'>, <class 'int'>)
+    """
+    
     if get_origin(annotation) is list:
-        args = get_args(annotation)
-        return args[0] if args else Any
-    for arg in get_args(annotation):
-        if arg is type(None):
-            continue
-        item_type = _list_item_type(arg)
-        if item_type is not None:
-            return item_type
-    return None
+        return True
+    # эта ветка нужна для случаев Optional[list[...]], чтобы достать list из Optional
+    return any(
+        get_origin(arg) is list
+        for arg in get_args(annotation)
+        if arg is not type(None)
+    )
 
 
-def _docx_placeholder_value(
-    section_name: str, field_name: str, annotation: Any
-) -> object:
-    placeholder = "{{ " + f"{section_name}.{field_name}" + " }}"
-    item_type = _list_item_type(annotation)
-    if item_type is None:
-        return placeholder
-    if inspect.isclass(item_type) and issubclass(item_type, BaseModel):
-        return [
-            {
-                subfield_name: "{{ "
-                + f"{section_name}.{field_name}.{subfield_name}"
-                + " }}"
-                for subfield_name in item_type.model_fields
-            }
-        ]
-    return [placeholder]
-
-
-def _nested_model_type(annotation: Any) -> type[BaseModel] | None:
-    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
-        return annotation
-    for arg in get_args(annotation):
-        if arg is type(None):
-            continue
-        if inspect.isclass(arg) and issubclass(arg, BaseModel):
-            return arg
-    return None
-
-
-def filter_mode_payload_and_validate(
-    assembly_model: type[BaseModel],
-    results: dict[str, object],
-) -> BaseModel:
-    """Подставляет в assembly только те блоки, что есть в `results` (ключи — имена классов)."""
-    payload: dict[str, object] = {}
-    for field_name, field_info in assembly_model.model_fields.items():
-        nested = _nested_model_type(field_info.annotation)
-        if nested is None:
-            continue
-        value = results.get(nested.__name__)
-        if value is not None:
-            payload[field_name] = value
-    return assembly_model.model_validate(payload)
-
-
-def filter_mode_assembly_to_docx_context(
-    assembly_model: type[BaseModel],
-    data: BaseModel,
-    *,
-    preserve_unfilled: bool = False,
+def _build_field_placeholders(
+    field_name: str, model_cls: type[BaseModel]
 ) -> dict[str, object]:
-    """
-    Контекст для docxtpl: snake_case-ключи как в шаблоне.
-    Незаполненные секции — пустой dict, чтобы Jinja не падал на partial-прогоне.
-    В filter_mode можно сохранить плейсхолдеры как строки `{{ section.field }}`.
-    """
+    """Заглушки для docxtpl: str или [str] для list-полей (под {% for %})."""
+    
+    placeholders: dict[str, object] = {}
+    for subfield_name, field_info in model_cls.model_fields.items():
+        text = "{{ " + f"{field_name}.{subfield_name}" + " }}"
+        placeholders[subfield_name] = [text] if _is_list_field(field_info.annotation) else text
+    return placeholders
+
+
+def _merge_field_data_with_placeholders(
+    placeholders: dict[str, object],
+    field_data: dict[str, object],
+) -> dict[str, object]:
+    """Реальные значения из графа; где None или [] — оставляем плейсхолдер."""
+    
+    merged = {}
+    for subfield_name, placeholder in placeholders.items():
+        actual = field_data.get(subfield_name)
+        if actual is None or actual == []:
+            merged[subfield_name] = placeholder
+        else:
+            merged[subfield_name] = actual
+    return merged
+
+
+def assembly_results_to_docx_context(
+    assembly_model: type[BaseModel],
+    results_dict: dict[str, object],
+) -> dict[str, object]:
+    """Превращает сырые результаты графа в dict для docxtpl."""
+
+    field_to_model = _field_to_model(assembly_model)
+    payload = {k: v for k, v in results_dict.items() if v is not None}
+    data: BaseModel = assembly_model.model_validate(payload)
     dumped = data.model_dump(mode="json")
+
     ctx: dict[str, object] = {}
-    for field_name, field_info in assembly_model.model_fields.items():
-        value = dumped.get(field_name)
-        if not preserve_unfilled:
-            ctx[field_name] = value if value is not None else {}
-            continue
+    for field_name, model_cls in field_to_model.items():
+        placeholders = _build_field_placeholders(field_name, model_cls)
+        field_data = dumped.get(field_name)
 
-        nested = _nested_model_type(field_info.annotation)
-        if nested is None:
-            ctx[field_name] = value
-            continue
-
-        placeholders = {
-            subfield_name: _docx_placeholder_value(
-                field_name,
-                subfield_name,
-                subfield_info.annotation,
+        if isinstance(field_data, dict):
+            ctx[field_name] = _merge_field_data_with_placeholders(
+                placeholders, field_data
             )
-            for subfield_name, subfield_info in nested.model_fields.items()
-        }
-        if isinstance(value, dict):
-            ctx[field_name] = {
-                key: placeholders[key] if item is None or item == [] else item
-                for key, item in {**placeholders, **value}.items()
-            }
         else:
             ctx[field_name] = placeholders
     return ctx

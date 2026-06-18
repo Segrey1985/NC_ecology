@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, Field
 
+from src.utils.utils import FIELD_TO_MODEL_ATTR
 
 def test_iter_models_from_module_filters_imported_models(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Создаём временный пакет и модуль, чтобы проверить поведение importlib.
@@ -87,7 +88,9 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     fake_resources = FakeResources()
 
     class FakeAssembly(BaseModel):
-        M: str | None = None
+        m: str | None = None
+
+    setattr(FakeAssembly, FIELD_TO_MODEL_ATTR, {"m": M})
 
     monkeypatch.setattr("main.init_graph", lambda *args, **kwargs: (object(), fake_resources))
     monkeypatch.setattr("main.iter_models_from_module", lambda _p: [M])
@@ -119,7 +122,7 @@ def test_main_writes_output_and_deletes_uuid_collection(tmp_path: Path, monkeypa
     out_json = out_dir / "matter_output.json"
     assert out_json.exists()
     assert out_json.read_text(encoding="utf-8").strip() != ""
-    assert "M" in out_json.read_text(encoding="utf-8")
+    assert '"m"' in out_json.read_text(encoding="utf-8")
     assert fake_resources.qdrant_service.client.deleted == [collection_name]
 
 
@@ -134,7 +137,9 @@ def test_main_filter_mode_uses_iter_chapter_models(
     called = {"filter": False}
 
     class FakeAssembly(BaseModel):
-        M: dict | None = None
+        m: dict | None = None
+
+    setattr(FakeAssembly, FIELD_TO_MODEL_ATTR, {"m": M})
 
     def fake_iter_chapter(_path: str):
         called["filter"] = True

@@ -48,5 +48,14 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
         data = {k: v for k, v in data.items() if v}
         assert isinstance(data, dict)
         
-        # test_mode="on" => только 1 модель
-        assert len(data) == 1 + len(json.loads(table_placeholders_path.read_text(encoding="utf-8")))
+        def _is_placeholder(value) -> bool:
+            if isinstance(value, str):
+                return value.startswith("{{") and value.endswith("}}")
+            if isinstance(value, dict):
+                return all(_is_placeholder(v) for v in value.values())
+            if isinstance(value, list) and len(value) == 1:
+                return _is_placeholder(value[0])
+            return False
+        
+        filled = [k for k, v in data.items() if not _is_placeholder(v)]
+        assert len(filled) == 1 + len(json.loads(table_placeholders_path.read_text(encoding="utf-8")))

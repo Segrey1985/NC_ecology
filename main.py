@@ -4,7 +4,6 @@ import traceback
 import threading
 import tempfile
 from pathlib import Path
-from typing import Literal
 
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
@@ -26,8 +25,8 @@ from src.utils.utils import (
     iter_models_from_module,
     iter_chapter_models,
     pick_assembly_model,
-    filter_mode_payload_and_validate,
-    filter_mode_assembly_to_docx_context,
+    assembly_results_to_docx_context,
+    pascal_to_snake,
     build_input_query,
 )
 from src.templates.docx_template_engine import fill_docx_template
@@ -185,7 +184,9 @@ def main(
             if max_workers is None:
                 max_workers = min(4, max(1, len(models)))
 
-            results: dict[str, object] = {model.__name__: None for model in models}
+            results: dict[str, object] = {
+                pascal_to_snake(model.__name__): None for model in models
+            }
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
@@ -201,7 +202,7 @@ def main(
 
                 for future in as_completed(futures):
                     dct = future.result()
-                    results[dct["model_name"]] = dct["result"]
+                    results[pascal_to_snake(dct["model_name"])] = dct["result"]
                     total_results.append(dct)
 
         # print results
@@ -215,17 +216,10 @@ def main(
 
             assembly_module_path = chapter_module_path + ".assembly"
             assembly_model = pick_assembly_model(assembly_module_path)
-
-            if test_mode == "filter":
-                data = filter_mode_payload_and_validate(assembly_model, results)
-                data_dict = filter_mode_assembly_to_docx_context(
-                    assembly_model,
-                    data,
-                    preserve_unfilled=True,
-                )
-            else:
-                data = assembly_model.model_validate(results)
-                data_dict = data.model_dump(mode="json")
+            data_dict = assembly_results_to_docx_context(
+                assembly_model=assembly_model,
+                results_dict=results,
+            )
 
             if table_placeholders_path:
                 try:
@@ -271,13 +265,14 @@ def main(
 if __name__ == "__main__":
 
     base = Path(__file__).parent
+    chapter_n = 6
     main(
-        template_docx_path=Path("src/ecology_chapters/chapter2/template.docx"),
-        project_parts_zip=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\data\IN\project1\project_parts.zip"),
-        table_placeholders_path=Path(r"C:\Users\maxfi\PycharmProjects\NC_ecology\src\ecology_chapters\chapter2\__test_table_placeholders.json"),
+        template_docx_path=Path(f"src/ecology_chapters/chapter{chapter_n}/template.docx"),
+        project_parts_zip=None,
+        table_placeholders_path=Path(rf"C:\Users\maxfi\PycharmProjects\NC_ecology\src\ecology_chapters\chapter{chapter_n}\table_placeholders.json"),
         output_path=base / "data" / "OUT" / "project1",
-        chapter_module_path="src.ecology_chapters.chapter2",
-        collection_name="ch2_off_parent",
-        test_mode="filter",
+        chapter_module_path=f"src.ecology_chapters.chapter{chapter_n}",
+        collection_name="full",
+        test_mode="off",
         max_workers=8,
     )
