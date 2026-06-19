@@ -38,7 +38,6 @@ def test_main_test_mode_on_processes_only_first_model_and_cleanup():
             output_path=out_dir,
             chapter_module_path="src.ecology_chapters.chapter1",
             collection_name=collection_name,
-            verbose=False,
             test_mode="on",
             max_workers=2,
         )

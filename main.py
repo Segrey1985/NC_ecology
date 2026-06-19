@@ -61,7 +61,7 @@ def _run_graph(
         config=config,
     ):
         if verbose:
-            print_chunk(chunk)
+            print_chunk(chunk, logger)
 
         if "answer_node" in chunk:
             final_output = chunk["answer_node"]

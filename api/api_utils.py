@@ -289,7 +289,7 @@ async def generate_chapter(
                     project_parts_zip=project_parts_zip_bytes,
                     output_path=output_dir,
                     collection_name=collection_name,
-                    verbose=False,
+                    verbose=True,
                     test_mode="off",
                 )
             else:
@@ -304,7 +304,7 @@ async def generate_chapter(
                         project_parts_zip=project_parts_zip_bytes,
                         output_path=output_dir / "__debug__" / CHAPTER0.name,
                         collection_name=collection_name,
-                        verbose=False,
+                        verbose=True,
                         test_mode="off",
                         save_db=1,
                     )
@@ -332,7 +332,7 @@ async def generate_chapter(
                     output_path=output_dir,
                     chapter_module_path=chapter_module_path,
                     collection_name=collection_name,
-                    verbose=False,
+                    verbose=True,
                     test_mode="off",
                     max_workers=max_workers,
                 )
@@ -414,7 +414,7 @@ async def generate_all_chapters(
                     project_parts_zip=project_parts_zip_bytes,
                     output_path=ch0_out,
                     collection_name=collection_name,
-                    verbose=False,
+                    verbose=True,
                     test_mode=test_mode,
                     save_db=1,
                 )
@@ -450,7 +450,7 @@ async def generate_all_chapters(
             common_args = {
                 "project_parts_zip": project_parts_zip_bytes,
                 "collection_name": collection_name,
-                "verbose": False,
+                "verbose": True,
                 "test_mode": test_mode,
                 "max_workers": max_workers,
                 "save_db": 1,

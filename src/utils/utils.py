@@ -376,7 +376,11 @@ def _safe_print(text: str) -> None:
         print(safe)
 
 
-def print_chunk(chunk):
+def print_chunk(chunk, logger=None):
+    
+    if logger:
+        _safe_print = logger.info
+    
     for node_name, data in chunk.items():
 
         _safe_print(f"\n\n{'=' * 30} {node_name} {'=' * 30}")
