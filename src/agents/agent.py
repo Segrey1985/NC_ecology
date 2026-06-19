@@ -260,10 +260,7 @@ def rag_search_node(
     chunks = _rag_search_and_rerank(
         resources, rag_prompts, reranker_prompts, get_output_model(config), get_chapter_module_path(config)
     )
-    logger.info(
-        f"[agent_2] RAG search completed "
-        f"(rag_prompts={len(rag_prompts)}, reranker_prompts={len(reranker_prompts)})"
-    )
+    logger.info("[agent] RAG search completed")
     return {"chunks": chunks}
 
 

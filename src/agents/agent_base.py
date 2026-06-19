@@ -126,7 +126,7 @@ def rag_search_node(state: AgentState, resources: GraphResources) -> AgentState:
     rag_query = state.get("rag_query") or state["for_rag_search"]
     parent_texts = search_in_related_disciplines(rag_query, resources)
     rag_context = format_rag_context(parent_texts)
-    logger.info(f"RAG search completed for query: {rag_query}")
+    logger.info("[agent_base] RAG search completed")
     return {
         "rag_query": rag_query,
         "rag_context": rag_context,
