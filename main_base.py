@@ -248,7 +248,9 @@ def main(
             project_parts_tmp.cleanup()
         if output_log_handler_id is not None:
             logger.remove(output_log_handler_id)
-        if "save_db" not in kwargs:
+            
+        need_save_db = kwargs.get("save_db", False)
+        if not need_save_db:
             qdrant_service = getattr(resources, "qdrant_service", None)
             if (
                 qdrant_service

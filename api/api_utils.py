@@ -149,6 +149,7 @@ def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
 
 
 def delete_qdrant_collection_if_temp(collection_name: str) -> None:
+    """Удаляет qdrant-коллекцию если она существует и является валидным uuid"""
     client = QdrantClient(url=cfg.QDRANT_URL)
     if client.collection_exists(collection_name) and is_valid_uuid4_hex(collection_name):
         client.delete_collection(collection_name)
@@ -296,7 +297,7 @@ async def generate_chapter(
                     collection_name=collection_name,
                     verbose=True,
                     test_mode="off",
-                    save_db=1,
+                    save_db=True if request else False,
                 )
             else:
                 if extract_base:
@@ -341,11 +342,13 @@ async def generate_chapter(
                     verbose=True,
                     test_mode="off",
                     max_workers=max_workers,
-                    save_db=1,
+                    save_db=True if request else False,
                 )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        
+        finally:
+            if not request:
+                delete_qdrant_collection_if_temp(collection_name)
         return zip_output_dir(output_dir, result_filename)
 
 
@@ -487,5 +490,5 @@ async def generate_all_chapters(
             return zip_output_dir(output_dir, "all_chapters.zip")
     
     finally:
-        # delete_qdrant_collection_if_temp(collection_name)
-        pass
+        if not request:
+            delete_qdrant_collection_if_temp(collection_name)
