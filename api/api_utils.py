@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile, Request
 from fastapi.responses import StreamingResponse
 from qdrant_client import QdrantClient
 
@@ -19,6 +19,7 @@ from main_base import main as run_main_base
 from src.utils.logger import logger
 from src.utils.utils import is_valid_uuid4_hex
 from src.utils.validators import validate_docx, validate_json, validate_zip
+from src.mongo.user_collections import allocate_qdrant_collection
 
 
 ECOLOGY_CHAPTERS_ROOT = Path(__file__).resolve().parent.parent / "src" / "ecology_chapters"
@@ -192,6 +193,7 @@ def _run_chapters_1_and_2_in_threads(
 
 async def generate_chapter(
     *,
+    request: Request | None = None,
     spec: ChapterSpec,
     template_docx: UploadFile | None = None,
     project_parts_zip: UploadFile | None = None,
@@ -207,6 +209,11 @@ async def generate_chapter(
     max_workers = spec.default_max_workers if max_workers is None else max_workers
     extract_base = spec.default_extract_base if extract_base is None else extract_base
     
+    if request is not None and collection_name is None:
+        collection_name = await allocate_qdrant_collection(request.state.session_cookie)
+    else:
+        collection_name = collection_name or uuid.uuid4().hex
+
     # Валидация загруженных файлов до создания временной директории.
     if placeholders:
         await validate_json(placeholders)
@@ -266,8 +273,6 @@ async def generate_chapter(
         if project_parts_zip:
             project_parts_zip_bytes = await project_parts_zip.read()
         
-        collection_name = collection_name or uuid.uuid4().hex
-        
         logger.info(f"{pipeline=}")
         logger.info(f"{template_docx_path=}")
         logger.info(f"{placeholders_path=}")
@@ -291,6 +296,7 @@ async def generate_chapter(
                     collection_name=collection_name,
                     verbose=True,
                     test_mode="off",
+                    save_db=1,
                 )
             else:
                 if extract_base:
@@ -335,6 +341,7 @@ async def generate_chapter(
                     verbose=True,
                     test_mode="off",
                     max_workers=max_workers,
+                    save_db=1,
                 )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -344,6 +351,7 @@ async def generate_chapter(
 
 async def generate_all_chapters(
     *,
+    request: Request | None = None,
     project_parts_zip: UploadFile | None,
     collection_name: str | None = None,
     max_workers: int | None = None,
@@ -356,9 +364,13 @@ async def generate_all_chapters(
     template_docx_ch1: UploadFile | None = None,
     template_docx_ch2: UploadFile | None = None,
 ):
-    collection_name = collection_name or uuid.uuid4().hex
     max_workers = CHAPTER1.default_max_workers if max_workers is None else max_workers
     
+    if request is not None and collection_name is None:
+        collection_name = await allocate_qdrant_collection(request.state.session_cookie)
+    else:
+        collection_name = collection_name or uuid.uuid4().hex
+
     try:
         if project_parts_zip:
             await validate_zip(project_parts_zip)
@@ -475,4 +487,5 @@ async def generate_all_chapters(
             return zip_output_dir(output_dir, "all_chapters.zip")
     
     finally:
-        delete_qdrant_collection_if_temp(collection_name)
+        # delete_qdrant_collection_if_temp(collection_name)
+        pass

@@ -1,5 +1,6 @@
 import uvicorn
-from fastapi import FastAPI, File, UploadFile
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, File, UploadFile, Request
 
 from api.api_utils import (
     CHAPTER0,
@@ -11,8 +12,17 @@ from api.api_utils import (
 )
 from api.session_middleware import add_session_middleware
 from api.concurrency_middleware import add_concurrency_middleware
+from src.mongo.mongo_client import connect_mongo, disconnect_mongo
 
-app = FastAPI(title="NC_ecology API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await connect_mongo()      # старт uvicorn / docker
+    yield
+    await disconnect_mongo()   # остановка приложения
+    
+
+app = FastAPI(title="NC_ecology API", version="0.1.0", lifespan=lifespan)
 
 # потом по куки блокируем
 add_concurrency_middleware(app)
@@ -38,11 +48,13 @@ def health():
     tags=["Generation"],
 )
 async def chapter0(
+    request: Request,
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с документами смежных разделов в формате pdf"
     ),
 ):
     return await generate_chapter(
+        request=request,
         spec=CHAPTER0,
         project_parts_zip=project_parts_zip,
     )
@@ -55,11 +67,13 @@ async def chapter0(
     tags=["Generation"],
 )
 async def chapter1(
+    request: Request,
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
+        request=request,
         spec=CHAPTER1,
         project_parts_zip=project_parts_zip,
     )
@@ -72,11 +86,13 @@ async def chapter1(
     tags=["Generation"],
 )
 async def chapter2(
+    request: Request,
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
+        request=request,
         spec=CHAPTER2,
         project_parts_zip=project_parts_zip,
     )
@@ -89,11 +105,13 @@ async def chapter2(
     tags=["Generation"],
 )
 async def chapter6(
+    request: Request,
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
+        request=request,
         spec=CHAPTER6,
         project_parts_zip=project_parts_zip,
     )
@@ -109,11 +127,15 @@ async def chapter6(
     tags=["Generation"],
 )
 async def chapters_all(
+    request: Request,
     project_parts_zip: UploadFile | None = File(
         None, description="[обязательно] Zip-архив с PDF смежных разделов"
     ),
 ):
-    return await generate_all_chapters(project_parts_zip=project_parts_zip)
+    return await generate_all_chapters(
+        request=request,
+        project_parts_zip=project_parts_zip
+    )
 
 
 if __name__ == "__main__":
