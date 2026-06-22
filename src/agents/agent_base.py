@@ -27,7 +27,7 @@ from src.retrieval.qdrant import (
 )
 from src.retrieval.reranker import rerank_chunks
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = cfg["MAX_ATTEMPTS"]
 
 
 @dataclass(frozen=True)

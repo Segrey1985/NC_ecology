@@ -63,6 +63,8 @@ class Config(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     MONGO_URI: str = "mongodb://localhost:27017"
     RERANKER_MODEL: str = "rerank-4-pro"
+    MAX_ATTEMPTS: int = 3
+    N_PROMPTS: int = 2
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
 
