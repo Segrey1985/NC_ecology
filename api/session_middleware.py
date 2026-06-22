@@ -25,20 +25,20 @@ class SessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        session_id, is_new_session = _resolve_session_id(request)
+        session_cookie, is_new_session = _resolve_session_id(request)
 
-        # резервируем session_id (в пределах этого request) для других обработчиков (здесь не используется)
-        request.state.session_id = session_id
+        # резервируем session_cookie (в пределах этого request) для других обработчиков (здесь не используется)
+        request.state.session_cookie = session_cookie
 
 
-        logger.info(f"session_id={session_id} | {request.method} {request.url.path}")
+        logger.info(f"session_cookie={session_cookie} | {request.method} {request.url.path}")
         response = await call_next(request)
 
         if is_new_session:
-            logger.info(f"session_id={session_id} | set new session cookie")
+            logger.info(f"session_cookie={session_cookie} | set new session cookie")
             response.set_cookie(
                 key=SESSION_COOKIE_NAME,
-                value=session_id,
+                value=session_cookie,
                 max_age=SESSION_MAX_AGE,
                 httponly=True,
                 samesite="lax",

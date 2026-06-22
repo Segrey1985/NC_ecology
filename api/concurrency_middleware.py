@@ -39,13 +39,13 @@ class ConcurrencyMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
 
-        session_id = getattr(request.state, "session_id", None)
-        if not session_id:
+        session_cookie = getattr(request.state, "session_cookie", None)
+        if not session_cookie:
             return await call_next(request)
 
-        if await try_acquire_session(session_id) is False:
+        if await try_acquire_session(session_cookie) is False:
             logger.info(
-                f"session_id={session_id} | concurrent generation request rejected"
+                f"session_cookie={session_cookie} | concurrent generation request rejected"
             )
             return JSONResponse(
                 status_code=429,
@@ -55,7 +55,7 @@ class ConcurrencyMiddleware(BaseHTTPMiddleware):
         try:
             return await call_next(request)
         finally:
-            await release_session(session_id)
+            await release_session(session_cookie)
 
 
 def add_concurrency_middleware(app: FastAPI) -> None:
