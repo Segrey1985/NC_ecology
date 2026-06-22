@@ -16,8 +16,11 @@ def _resolve_session_id(request: Request) -> tuple[str, bool]:
     :return: (session_id, is_new_session)
     """
     raw = request.cookies.get(SESSION_COOKIE_NAME)
+    logger.info(f"[_resolve_session_id] Текущий session_cookie={raw}")
     if raw and is_valid_uuid4_hex(raw):
+        logger.info(f"[_resolve_session_id] Использую текущий session_cookie")
         return raw, False
+    logger.info(f"[_resolve_session_id] Создаю новый session_cookie")
     return uuid.uuid4().hex, True
 
 
@@ -30,8 +33,6 @@ class SessionMiddleware(BaseHTTPMiddleware):
         # резервируем session_cookie (в пределах этого request) для других обработчиков (здесь не используется)
         request.state.session_cookie = session_cookie
 
-
-        logger.info(f"session_cookie={session_cookie} | {request.method} {request.url.path}")
         response = await call_next(request)
 
         if is_new_session:
