@@ -4,13 +4,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.mongo.db_model import QdrantCollection, User, parse_user
 from src.mongo.user_collections import allocate_qdrant_collection
 
+ZIP_HASH = "c" * 64
+
 
 def test_parse_user_validates_collections():
     user = parse_user(
         {
             "cookie": "a" * 32,
             "qdrant_collections": [
-                {"uuid": "b" * 32, "created_at": "2026-01-01T00:00:00+00:00"},
+                {
+                    "uuid": "b" * 32,
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "zip_hash": ZIP_HASH,
+                    "zip_name": '1',
+                },
             ],
         }
     )
@@ -24,9 +31,24 @@ def test_allocate_evicts_oldest_when_limit_reached():
     store = {
         "cookie": cookie,
         "qdrant_collections": [
-            {"uuid": "1" * 32, "created_at": "2026-01-01T00:00:00+00:00"},
-            {"uuid": "2" * 32, "created_at": "2026-01-02T00:00:00+00:00"},
-            {"uuid": "3" * 32, "created_at": "2026-01-03T00:00:00+00:00"},
+            {
+                "uuid": "1" * 32,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "zip_hash": "d" * 64,
+                "zip_name": "1",
+            },
+            {
+                "uuid": "2" * 32,
+                "created_at": "2026-01-02T00:00:00+00:00",
+                "zip_hash": "e" * 64,
+                "zip_name": "2",
+            },
+            {
+                "uuid": "3" * 32,
+                "created_at": "2026-01-03T00:00:00+00:00",
+                "zip_hash": "f" * 64,
+                "zip_name": '3',
+            },
         ],
     }
 
@@ -42,7 +64,7 @@ def test_allocate_evicts_oldest_when_limit_reached():
             patch("src.mongo.user_collections.get_database", return_value=db),
             patch("src.mongo.user_collections._delete_qdrant_collection") as delete_mock,
         ):
-            return await allocate_qdrant_collection(cookie), delete_mock
+            return await allocate_qdrant_collection(cookie, ZIP_HASH), delete_mock
 
     new_id, delete_mock = asyncio.run(_run())
 
@@ -54,3 +76,4 @@ def test_allocate_evicts_oldest_when_limit_reached():
     pushed = push_update["$push"]["qdrant_collections"]
     validated = QdrantCollection.model_validate(pushed)
     assert validated.uuid == new_id
+    assert validated.zip_hash == ZIP_HASH

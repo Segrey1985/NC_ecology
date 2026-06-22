@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 class QdrantCollection(BaseModel):
     uuid: str
     created_at: str
+    zip_hash: str
+    zip_name: str | None = Field(default='untitled')
 
 
 class User(BaseModel):

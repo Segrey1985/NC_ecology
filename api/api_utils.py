@@ -17,9 +17,9 @@ from config.config_file import TestMode, cfg
 from main import main as run_main
 from main_base import main as run_main_base
 from src.utils.logger import logger
-from src.utils.utils import is_valid_uuid4_hex
+from src.utils.utils import is_valid_uuid4_hex, file_hash
 from src.utils.validators import validate_docx, validate_json, validate_zip
-from src.mongo.user_collections import allocate_qdrant_collection
+from src.mongo.user_collections import allocate_qdrant_collection, find_qdrant_collection_by_hash
 
 
 ECOLOGY_CHAPTERS_ROOT = Path(__file__).resolve().parent.parent / "src" / "ecology_chapters"
@@ -148,6 +148,35 @@ def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
     )
 
 
+async def resolve_collection_name(
+    *,
+    request: Request | None,
+    collection_name: str | None,
+    zip_hash: str | None,
+    zip_name: str | None = None,
+) -> str:
+    # Имя коллекции передано явно (api_debug) - используем его
+    if collection_name is not None:
+        return collection_name
+    # есть request и zip_hash
+    if request is not None and zip_hash is not None:
+        existing = await find_qdrant_collection_by_hash(
+            session_cookie=request.state.session_cookie,
+            zip_hash=zip_hash,
+        )
+        # используем существующую
+        if existing:
+            return existing
+        # выделяем новую коллекцию
+        return await allocate_qdrant_collection(
+            cookie=request.state.session_cookie,
+            zip_hash=zip_hash,
+            zip_name=zip_name,
+        )
+    # Генерируем случайное uuid имя (api_debug)
+    return uuid.uuid4().hex
+
+
 def delete_qdrant_collection_if_temp(collection_name: str) -> None:
     """Удаляет qdrant-коллекцию если она существует и является валидным uuid"""
     client = QdrantClient(url=cfg.QDRANT_URL)
@@ -209,11 +238,6 @@ async def generate_chapter(
     result_filename = spec.result_filename
     max_workers = spec.default_max_workers if max_workers is None else max_workers
     extract_base = spec.default_extract_base if extract_base is None else extract_base
-    
-    if request is not None and collection_name is None:
-        collection_name = await allocate_qdrant_collection(request.state.session_cookie)
-    else:
-        collection_name = collection_name or uuid.uuid4().hex
 
     # Валидация загруженных файлов до создания временной директории.
     if placeholders:
@@ -271,8 +295,20 @@ async def generate_chapter(
             table_placeholders_path = spec.default_table_placeholders()
         
         project_parts_zip_bytes: bytes | None = None
-        if project_parts_zip:
+        zip_hash: str | None = None
+        zip_name: str | None = None
+        
+        if project_parts_zip is not None:
             project_parts_zip_bytes = await project_parts_zip.read()
+            zip_hash = file_hash(project_parts_zip_bytes)
+            zip_name = project_parts_zip.filename
+        
+        collection_name = await resolve_collection_name(
+            request=request,
+            collection_name=collection_name,
+            zip_hash=zip_hash,
+            zip_name=zip_name
+        )
         
         logger.info(f"{pipeline=}")
         logger.info(f"{template_docx_path=}")
@@ -368,11 +404,6 @@ async def generate_all_chapters(
     template_docx_ch2: UploadFile | None = None,
 ):
     max_workers = CHAPTER1.default_max_workers if max_workers is None else max_workers
-    
-    if request is not None and collection_name is None:
-        collection_name = await allocate_qdrant_collection(request.state.session_cookie)
-    else:
-        collection_name = collection_name or uuid.uuid4().hex
 
     try:
         if project_parts_zip:
@@ -396,9 +427,9 @@ async def generate_all_chapters(
             input_dir.mkdir(parents=True, exist_ok=True)
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            project_parts_zip_bytes: bytes | None = None
-            if project_parts_zip:
-                project_parts_zip_bytes = await project_parts_zip.read()
+            ch0_out = output_dir / CHAPTER0.name
+            ch1_out = output_dir / CHAPTER1.name
+            ch2_out = output_dir / CHAPTER2.name
             
             placeholders_ch0_path = await resolve_path(
                 placeholders_ch0,
@@ -416,9 +447,18 @@ async def generate_all_chapters(
                 input_dir / "chapter0_template.docx",
             )
             
-            ch0_out = output_dir / CHAPTER0.name
-            ch1_out = output_dir / CHAPTER1.name
-            ch2_out = output_dir / CHAPTER2.name
+            project_parts_zip_bytes: bytes | None = None
+            zip_hash: str | None = None
+            
+            if project_parts_zip is not None:
+                project_parts_zip_bytes = await project_parts_zip.read()
+                zip_hash = file_hash(project_parts_zip_bytes)
+            
+            collection_name = await resolve_collection_name(
+                request=request,
+                collection_name=collection_name,
+                zip_hash=zip_hash,
+            )
             
             try:
                 base_placeholders = await asyncio.to_thread(

@@ -1,9 +1,9 @@
 import re
-import json
 import glob
-import zipfile
 import pypdf
 import pymupdf
+import hashlib
+import zipfile
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional, Type, get_args, get_origin
@@ -23,6 +23,19 @@ UUID4_HEX_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 def is_valid_uuid4_hex(value: str) -> bool:
     return bool(UUID4_HEX_PATTERN.fullmatch(value))
+
+
+def file_hash(path_or_bytes, algo="sha256"):
+    h = hashlib.new(algo)
+
+    if isinstance(path_or_bytes, str):
+        with open(path_or_bytes, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+    else:
+        h.update(path_or_bytes)
+
+    return h.hexdigest()
 
 
 def extract_project_parts_pdfs(
