@@ -61,6 +61,7 @@ class Config(BaseSettings):
     EMBEDDINGS_MODEL_NAME: str = "text-embedding-3-large"
     EMBEDDINGS_LOCAL: bool = False
     QDRANT_URL: str = "http://localhost:6333"
+    MONGO_URI: str = "mongodb://localhost:27017"
     RERANKER_MODEL: str = "rerank-4-pro"
     USE_LANGFUSE: bool = True
     DEVICE: Literal["cpu", "cuda"] = "cuda" if torch.cuda.is_available() else "cpu"
