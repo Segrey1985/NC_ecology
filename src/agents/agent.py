@@ -37,8 +37,8 @@ from src.utils.utils import format_rag_context
 from src.utils.validators import validate_and_dump_json_str
 from src.utils.utils import get_part_names_for_model
 
-MAX_ATTEMPTS = cfg["MAX_ATTEMPTS"]
-N_PROMPTS = cfg["N_PROMPTS"]
+MAX_ATTEMPTS = cfg.MAX_ATTEMPTS
+N_PROMPTS = cfg.N_PROMPTS
 
 
 @dataclass(frozen=True)
