@@ -519,7 +519,10 @@ def pick_assembly_model(assembly_module_path: str) -> type[BaseModel]:
 
 
 def _field_to_model(assembly_model: type[BaseModel]) -> dict[str, type[BaseModel]]:
-    """Возвращает поле __field_to_model__ модели"""
+    """
+    Возвращает поле __field_to_model__ модели, например:
+    {'aquatic': <class 'src.ecology_chapters.chapter6.models.Aquatic'>, 'fauna': ... }
+    """
     
     mapping = getattr(assembly_model, FIELD_TO_MODEL_ATTR, None)
     if mapping is None:
