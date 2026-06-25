@@ -13,6 +13,7 @@ from pydantic.alias_generators import to_pascal
 from pdfminer.layout import LTTextBox, LTTextLine, LTTextContainer
 from pdfminer.high_level import extract_pages as extract_pages_miner
 from langchain_core.messages import AIMessage
+from pydantic.fields import FieldInfo
 
 from src.utils.logger import logger
 
@@ -622,13 +623,24 @@ def _build_field_placeholders(
 def _merge_field_data_with_placeholders(
     placeholders: dict[str, object],
     field_data: dict[str, object],
+    inner_model_fields: dict[str, FieldInfo],
 ) -> dict[str, object]:
     """Реальные значения из графа; где None или [] — оставляем плейсхолдер."""
     
     merged = {}
     for subfield_name, placeholder in placeholders.items():
         actual = field_data.get(subfield_name)
-        if actual is None or actual == []:
+        
+        # если модель вернула пустое поле и это поле имеет пометку vanish
+        # поле в doc не превращается в {{placeholder}}, а становится пустым ("")
+        # чтобы не рендерить блоки типа {%p if value %}
+        current_inner_model_fields = inner_model_fields.get(subfield_name)
+        _extra_schema = current_inner_model_fields.json_schema_extra or {}
+        vanish = _extra_schema.get("vanish", False)
+        if (not actual) and vanish:
+          merged[subfield_name] = ""
+          
+        elif not actual:
             merged[subfield_name] = placeholder
         else:
             merged[subfield_name] = actual
@@ -650,11 +662,13 @@ def assembly_results_to_docx_context(
     for field_name, model_cls in field_to_model.items():
         placeholders = _build_field_placeholders(field_name, model_cls)
         field_data = dumped.get(field_name)
+        inner_model_fields: dict[str, FieldInfo] = model_cls.model_fields  # {'authority_letter_text': FieldInfo(...
 
         if isinstance(field_data, dict):
             ctx[field_name] = _merge_field_data_with_placeholders(
-                placeholders, field_data
+                placeholders, field_data, inner_model_fields
             )
+        # если field_data = None (debug_model) сразу заполняем плейсхолдером
         else:
             ctx[field_name] = placeholders
     return ctx

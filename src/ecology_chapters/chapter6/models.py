@@ -26,6 +26,7 @@ class Flora(BaseModel):
             "Характеристика растительности района (муниципального образования). "
             "Может отсутствовать для объектов внутри города."
         ),
+        json_schema_extra= {"vanish": True},
     )
     site_surface_description: str = Field(
         ...,
@@ -54,12 +55,13 @@ class Flora(BaseModel):
     authority_letter_text: Optional[str] = Field(
         None,
         description=(
-            "Опциональное поле. При отсутствии контекста - null"
+            "Опциональное поле."
             "Текст со ссылкой на письмо уполномоченного органа (только при наличии!) "
             "(Комитет по природным ресурсам, КГИОП и т.п.) о наличии охраняемых видов. "
             "Пример: «Согласно письму Комитета по природным ресурсам Ленинградской "
             "области от 01.01.2024 № 123 на участке охраняемые виды ...»"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: list = PrivateAttr(default=["ИЭИ"])
 
@@ -92,6 +94,7 @@ class Fauna(BaseModel):
             "Текст со ссылкой на письмо уполномоченного органа об отсутствии "
             "охраняемых видов животных."
         ),
+        json_schema_extra={"vanish": True},
     )
     kotr_status: str = Field(
         ...,
@@ -107,6 +110,7 @@ class Fauna(BaseModel):
             "Наименование ближайшей КОТР (если требуется указать). "
             "Пример: «Юнтоловский заказник»."
         ),
+        json_schema_extra={"vanish": True},
     )
     nearest_kotr_distance: Optional[str] = Field(
         None,
@@ -132,6 +136,7 @@ class Oopt(BaseModel):
             "Описание системы ООПТ в регионе (опционально, для крупных объектов). "
             "Пример: «На территории Ленинградской области расположено 49 ООПТ…»"
         ),
+        json_schema_extra={"vanish": True},
     )
     nearest_oopt_name: str = Field(
         ...,
@@ -159,6 +164,7 @@ class Oopt(BaseModel):
             "Пример: «Согласно письму Комитета по природным ресурсам от 01.01.2024 "
             "№ 456 объект не затрагивает ООПТ.»"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: list = PrivateAttr(default=["ИЭИ"])
 
@@ -183,6 +189,7 @@ class Recultivation(BaseModel):
         description=(
             "Предусмотрена ли биологическая рекультивация (посев трав и т.п.)."
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: list = PrivateAttr(default=["ИЭИ"])
 
@@ -201,6 +208,7 @@ class Aquatic(BaseModel):
             "True — если участок расположен в водоохранной зоне или "
             "прибрежной защитной полосе водного объекта."
         ),
+        json_schema_extra={"vanish": True},
     )
     glavrybvod_report_ref: Optional[str] = Field(
         None,

@@ -47,6 +47,7 @@ class Ownership(BaseModel):
     ownership: Optional[str] = Field(
         None,
         description="Формулировка права пользования участком (например: договором аренды земельного участка № 123 от 01.01.2024).",
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
 
@@ -281,6 +282,7 @@ class PowerSupply(BaseModel):
     reliability_category: Optional[ReliabilityCategory] = Field(
         None,
         description="Категория надёжности электроснабжения",
+        json_schema_extra={"vanish": True},
     )
     has_diesel_generator: bool = Field(
         False,
@@ -321,14 +323,17 @@ class UtilityNetworks(BaseModel):
     gas_supply: Optional[str] = Field(
         None,
         description="Описание газоснабжения. Пример: Газоснабжение предусмотрено в соответствие с Техническими условиями на подключение (технологическое присоединение) газоиспользующего оборудования и объектов капитального строительства к сетям газорапределения, выданными ...",
+        json_schema_extra={"vanish": True},
     )
     water_supply: Optional[str] = Field(
         None,
         description="Описание водоснабжения. Пример: Проектом предусматривается подключение объекта к централизованной системе холодного водоснабжения согласно Техническим условиям, выданными...",
+        json_schema_extra={"vanish": True},
     )
     sewerage: Optional[str] = Field(
         None,
         description="Описание водоотведения. Пример: Водоотведение предусматривается в емкость для приема стоков / водосборный колодец.",
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=['Система водоснабжения', 'Система водоотведения', 'Система газоснабжения', 'ПЗ'])
 

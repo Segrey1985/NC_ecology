@@ -34,6 +34,7 @@ class Geology(BaseModel):
     ige_table: Optional[list[IGE]] = Field(
         None,
         description="Перечень инженерно-геологических элементов (ИГЭ). Должен отражать все перечисленные ИГЭ в разделах 'description', 'num_layers'",
+        json_schema_extra={"vanish": True},
     )
     num_layers_: str = Field(..., description="Количество инженерно-геологических элементов (ИГЭ)")
     _use_parent: bool = PrivateAttr(default=True)
@@ -57,6 +58,7 @@ class Hydrogeology(BaseModel):
             "Описание поверхностных водных объектов вблизи площадки (при наличии). "
             "Пример: 'Ближайший водный объект – р. Нева, расположена в 500 м к югу от площадки.'"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=["ИГИ"])
 
@@ -67,26 +69,32 @@ class DangerousProcesses(BaseModel):
     not_detected: bool = Field(
         False,
         description="Если True – опасные процессы не выявлены, выводится стандартная формулировка.",
+        json_schema_extra={"vanish": True},
     )
     flooding: Optional[FloodingInfo] = Field(
         None,
         description="Информация о подтоплении (при наличии)",
+        json_schema_extra={"vanish": True},
     )
     seismic: Optional[SeismicInfo] = Field(
         None,
         description="Информация о сейсмических процессах (при наличии)",
+        json_schema_extra={"vanish": True},
     )
     frost_heave: Optional[FrostHeaveInfo] = Field(
         None,
         description="Информация о морозном пучении (при наличии)",
+        json_schema_extra={"vanish": True},
     )
     suffosion: Optional[SuffosionInfo] = Field(
         None,
         description="Информация о суффозии (при наличии)",
+        json_schema_extra={"vanish": True},
     )
     additional_description: Optional[str] = Field(
         None,
         description="Дополнительное описание иных опасных процессов (при наличии)",
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=["ИГИ"])
 
@@ -100,6 +108,7 @@ class Soil(BaseModel):
             "Описание процедуры отбора проб: количество проб, глубины, лаборатория. "
             "Пример: 'На территории участка были отобраны 3 объединённые пробы с глубин 0,0-0,2 м и 0,2-2,0 м.'"
         ),
+        json_schema_extra={"vanish": True},
     )
     chemical_results: str = Field(
         ...,
@@ -116,6 +125,7 @@ class Soil(BaseModel):
             "Результаты анализа на нефтепродукты. "
             "Пример: 'Содержание нефтепродуктов составляет 42 мг/кг, что не превышает ОДК (300 мг/кг).'"
         ),
+        json_schema_extra={"vanish": True},
     )
     benzpyrene_results: Optional[str] = Field(
         None,
@@ -123,6 +133,7 @@ class Soil(BaseModel):
             "Результаты анализа на 3,4-бенз(а)пирен. "
             "Пример: 'Содержание 3,4-бенз(а)пирена составляет 0,005 мг/кг при ПДК 0,02 мг/кг.'"
         ),
+        json_schema_extra={"vanish": True},
     )
     microbiology_results: str = Field(
         ...,
@@ -183,6 +194,7 @@ class LandUse(BaseModel):
             "Перечень ЗОУИТ (зон с особыми условиями использования территории), "
             "попадающих в границы участка. Заполняется при наличии."
         ),
+        json_schema_extra={"vanish": True},
     )
     absence_items: Optional[list[str]] = Field(
         None,
@@ -191,6 +203,7 @@ class LandUse(BaseModel):
             "Пример элементов: 'курорты и природно-лечебные ресурсы', "
             "'объекты государственной мелиоративной системы'"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=["ПЗУ"])
 
@@ -209,6 +222,7 @@ class Technogenic(BaseModel):
     topsoil_not_fertile: bool = Field(
         False,
         description="Если True — поверхностный слой не является плодородным, снятие ПСП не предусмотрено.",
+        json_schema_extra={"vanish": True},
     )
     topsoil_description: Optional[str] = Field(
         None,
@@ -246,6 +260,7 @@ class PhysicalFactors(BaseModel):
             "Описание результатов измерений вибрации (при наличии). "
             "Пример: 'Уровень общей вибрации составил 42 дБ при ПДУ 72 дБ.'"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=["ИЭИ"])
 
@@ -260,6 +275,7 @@ class Measures(BaseModel):
             "Пример элементов: 'организация площадок временного хранения отходов с твёрдым покрытием', "
             "'проведение рекультивации нарушенных земель'"
         ),
+        json_schema_extra={"vanish": True},
     )
     _part_name: str = PrivateAttr(default=["ИГИ", "ИЭИ", "ПЗ"])
 
