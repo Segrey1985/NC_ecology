@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile_cpu
+    image: ecology-app-cpu
+    environment:
+      DEVICE: cpu
+    gpus: !reset null
+
+# docker compose up --build
+# override подхватывается автоматически; GPU не требуется
