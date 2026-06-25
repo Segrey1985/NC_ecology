@@ -75,7 +75,7 @@ CHAPTER6 = ChapterSpec(
     module_path="src.ecology_chapters.chapter6",
     result_filename="chapter6.zip",
 )
-ALL_CHAPTER_SPECS = (CHAPTER0, CHAPTER1, CHAPTER2)
+ALL_CHAPTER_SPECS = (CHAPTER0, CHAPTER1, CHAPTER2, CHAPTER6)
 
 
 async def write_upload(upload: UploadFile, dest: Path) -> Path:
@@ -187,34 +187,22 @@ def delete_qdrant_collection_if_temp(collection_name: str) -> None:
         )
 
 
-def _run_chapters_1_and_2_in_threads(
+def _run_chapter_pipelines_in_threads(
     *,
-    template_ch1_path: Path,
-    table_placeholders_ch1_path: Path | None,
-    ch1_out: Path,
-    template_ch2_path: Path,
-    table_placeholders_ch2_path: Path | None,
-    ch2_out: Path,
+    chapter_jobs: list[dict],
     common_args: dict,
 ) -> None:
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=max(4, len(chapter_jobs))) as pool:
         futures = [
             pool.submit(
                 run_main,
-                template_docx_path=template_ch1_path,
-                table_placeholders_path=table_placeholders_ch1_path,
-                output_path=ch1_out,
-                chapter_module_path=CHAPTER1.module_path,
+                template_docx_path=job["template_docx_path"],
+                table_placeholders_path=job["table_placeholders_path"],
+                output_path=job["output_path"],
+                chapter_module_path=job["chapter_module_path"],
                 **common_args,
-            ),
-            pool.submit(
-                run_main,
-                template_docx_path=template_ch2_path,
-                table_placeholders_path=table_placeholders_ch2_path,
-                output_path=ch2_out,
-                chapter_module_path=CHAPTER2.module_path,
-                **common_args,
-            ),
+            )
+            for job in chapter_jobs
         ]
 
         for future in futures:
@@ -400,8 +388,10 @@ async def generate_all_chapters(
     table_placeholders_ch0: UploadFile | None = None,
     table_placeholders_ch1: UploadFile | None = None,
     table_placeholders_ch2: UploadFile | None = None,
+    table_placeholders_ch6: UploadFile | None = None,
     template_docx_ch1: UploadFile | None = None,
     template_docx_ch2: UploadFile | None = None,
+    template_docx_ch6: UploadFile | None = None,
 ):
     max_workers = CHAPTER1.default_max_workers if max_workers is None else max_workers
 
@@ -413,9 +403,11 @@ async def generate_all_chapters(
                 (table_placeholders_ch0, validate_json),
                 (table_placeholders_ch1, validate_json),
                 (table_placeholders_ch2, validate_json),
+                (table_placeholders_ch6, validate_json),
                 (template_docx_ch0, validate_docx),
                 (template_docx_ch1, validate_docx),
                 (template_docx_ch2, validate_docx),
+                (template_docx_ch6, validate_docx),
         ):
             if upload:
                 await validator(upload)
@@ -430,6 +422,7 @@ async def generate_all_chapters(
             ch0_out = output_dir / CHAPTER0.name
             ch1_out = output_dir / CHAPTER1.name
             ch2_out = output_dir / CHAPTER2.name
+            ch6_out = output_dir / CHAPTER6.name
             
             placeholders_ch0_path = await resolve_path(
                 placeholders_ch0,
@@ -488,6 +481,12 @@ async def generate_all_chapters(
                 input_dir,
                 base_placeholders,
             )
+            table_placeholders_ch6_path = await resolve_table_placeholders_path(
+                table_placeholders_ch6,
+                CHAPTER6,
+                input_dir,
+                base_placeholders,
+            )
             
             template_ch1_path = await resolve_path(
                 template_docx_ch1,
@@ -499,8 +498,13 @@ async def generate_all_chapters(
                 CHAPTER2.default_template(),
                 input_dir / "chapter2_template.docx",
             )
+            template_ch6_path = await resolve_path(
+                template_docx_ch6,
+                CHAPTER6.default_template(),
+                input_dir / "chapter6_template.docx",
+            )
             
-            logger.info("\nНАЧИНАЮ ФОРМИРОВАТЬ ГЛАВЫ 1 И 2\n")
+            logger.info("\nНАЧИНАЮ ФОРМИРОВАТЬ ГЛАВЫ 1, 2 И 6\n")
             
             common_args = {
                 "project_parts_zip": project_parts_zip_bytes,
@@ -511,21 +515,37 @@ async def generate_all_chapters(
                 "save_db": 1,
             }
             
+            chapter_jobs = [
+                {
+                    "template_docx_path": template_ch1_path,
+                    "table_placeholders_path": table_placeholders_ch1_path,
+                    "output_path": ch1_out,
+                    "chapter_module_path": CHAPTER1.module_path,
+                },
+                {
+                    "template_docx_path": template_ch2_path,
+                    "table_placeholders_path": table_placeholders_ch2_path,
+                    "output_path": ch2_out,
+                    "chapter_module_path": CHAPTER2.module_path,
+                },
+                {
+                    "template_docx_path": template_ch6_path,
+                    "table_placeholders_path": table_placeholders_ch6_path,
+                    "output_path": ch6_out,
+                    "chapter_module_path": CHAPTER6.module_path,
+                },
+            ]
+            
             try:
                 await asyncio.to_thread(
-                    _run_chapters_1_and_2_in_threads,
-                    template_ch1_path=template_ch1_path,
-                    table_placeholders_ch1_path=table_placeholders_ch1_path,
-                    ch1_out=ch1_out,
-                    template_ch2_path=template_ch2_path,
-                    table_placeholders_ch2_path=table_placeholders_ch2_path,
-                    ch2_out=ch2_out,
+                    _run_chapter_pipelines_in_threads,
+                    chapter_jobs=chapter_jobs,
                     common_args=common_args,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             
-            logger.info("\nГЛАВЫ 1 И 2 СФОРМИРОВАНЫ\n")
+            logger.info("\nГЛАВЫ 1, 2 И 6 СФОРМИРОВАНЫ\n")
             
             return zip_output_dir(output_dir, "all_chapters.zip")
     

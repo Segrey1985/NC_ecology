@@ -188,7 +188,7 @@ async def chapter6(
     "/chapters/all",
     summary="Запуск всех глав одним запросом",
     description=(
-        "Генерирует главы 0, 1, 2 за один вызов и возвращает единый zip-архив с результатами. "
+        "Генерирует главы 0, 1, 2 и 6 за один вызов и возвращает единый zip-архив с результатами. "
         "По умолчанию используются шаблоны и плейсхолдеры из `src/ecology_chapters`."
     ),
     tags=["Generation"],
@@ -212,11 +212,17 @@ async def chapters_all(
     table_placeholders_ch2: UploadFile | None = File(
         None, description="[### для отладки ###] JSON с табличными плейсхолдерами для главы 2"
     ),
+    table_placeholders_ch6: UploadFile | None = File(
+        None, description="[### для отладки ###] JSON с табличными плейсхолдерами для главы 6"
+    ),
     template_docx_ch1: UploadFile | None = File(
         None, description="[### для отладки ###] DOCX шаблон для главы 1"
     ),
     template_docx_ch2: UploadFile | None = File(
         None, description="[### для отладки ###] DOCX шаблон для главы 2"
+    ),
+    template_docx_ch6: UploadFile | None = File(
+        None, description="[### для отладки ###] DOCX шаблон для главы 6"
     ),
     max_workers: int | None = Form(
         CHAPTER1.default_max_workers,
@@ -235,8 +241,10 @@ async def chapters_all(
         table_placeholders_ch0=table_placeholders_ch0,
         table_placeholders_ch1=table_placeholders_ch1,
         table_placeholders_ch2=table_placeholders_ch2,
+        table_placeholders_ch6=table_placeholders_ch6,
         template_docx_ch1=template_docx_ch1,
         template_docx_ch2=template_docx_ch2,
+        template_docx_ch6=template_docx_ch6,
     )
 
 

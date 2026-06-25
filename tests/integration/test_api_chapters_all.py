@@ -20,7 +20,7 @@ def _make_project_parts_zip(pdf_paths: list[Path]) -> bytes:
 def test_chapters_all_test_mode_mock():
     """
     POST /chapters/all с test_mode=mock:
-    - возвращает zip с результатами chapter0/1/2
+    - возвращает zip с результатами chapter0/1/2/6
     """
     base = Path(__file__).resolve().parents[2]
     trim_dir = base / "data" / "IN" / "project1" / "trim"
@@ -54,5 +54,6 @@ def test_chapters_all_test_mode_mock():
             assert any(n.startswith("chapter0/") and n.endswith("placeholders.json") for n in names)
             assert any(n.startswith("chapter1/") and n.endswith("chapter1_output.json") for n in names)
             assert any(n.startswith("chapter2/") and n.endswith("chapter2_output.json") for n in names)
+            assert any(n.startswith("chapter6/") and n.endswith("chapter6_output.json") for n in names)
     finally:
         logger.remove(handler_id)
