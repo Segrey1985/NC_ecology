@@ -6,12 +6,12 @@
   <title>NC_ecology — Автоматизация раздела ООС</title>
   <style>
     :root {
-      --navy: #0d2b54;          /* тёмно-синий основной */
-      --navy-dark: #081f3e;     /* глубокий тёмно-синий (hover) */
-      --navy-light: #1c4a86;    /* светлее синий (акценты) */
-      --navy-accent: #2f6fc0;   /* яркий синий */
-      --navy-bg: #eaf1fb;       /* очень светлый сине-белый фон зон */
-      --navy-border: #b9cdec;   /* светло-синяя рамка */
+      --navy: #0d2b54;
+      --navy-dark: #081f3e;
+      --navy-light: #1c4a86;
+      --navy-accent: #2f6fc0;
+      --navy-bg: #eaf1fb;
+      --navy-border: #b9cdec;
       --gray: #5a6b80;
       --gray-light: #eef2f7;
       --white: #ffffff;
@@ -42,6 +42,7 @@
       border-radius: 20px;
       padding: 4px 14px;
       font-size: 12px;
+      white-space: nowrap;
     }
     .container { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
 
@@ -119,30 +120,36 @@
       font-size: 14px;
       display: none;
     }
-    .status.info { background: var(--navy-bg); color: var(--navy-light); border: 1px solid var(--navy-border); display: block; }
+    .status.info    { background: var(--navy-bg); color: var(--navy-light); border: 1px solid var(--navy-border); display: block; }
     .status.success { background: #e6f2ec; color: #1b6b46; border: 1px solid #a7d3bd; display: block; }
-    .status.error { background: #fdecec; color: #b4242b; border: 1px solid #f0b3b6; display: block; }
+    .status.error   { background: #fdecec; color: #b4242b; border: 1px solid #f0b3b6; display: block; }
     .status.loading { background: var(--navy-bg); color: var(--navy); border: 1px solid var(--navy-border); display: block; }
 
-    .progress-bar {
-      height: 6px;
-      background: #dbe4f0;
-      border-radius: 3px;
-      margin-top: 10px;
-      overflow: hidden;
+    /* Прогресс-бар с анимированным шагом */
+    .progress-wrap {
+      margin-top: 12px;
       display: none;
     }
-    .progress-bar.active { display: block; }
+    .progress-wrap.active { display: block; }
+    .progress-label {
+      font-size: 12px;
+      color: var(--gray);
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .progress-bar {
+      height: 8px;
+      background: #dbe4f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
     .progress-bar .fill {
       height: 100%;
-      background: var(--navy-accent);
-      border-radius: 3px;
-      animation: progress 2s ease-in-out infinite;
-    }
-    @keyframes progress {
-      0% { width: 5%; }
-      50% { width: 80%; }
-      100% { width: 95%; }
+      background: linear-gradient(90deg, var(--navy-accent), var(--navy-light));
+      border-radius: 4px;
+      transition: width 0.8s ease;
+      width: 5%;
     }
 
     .download-btn {
@@ -277,7 +284,10 @@
     <div class="card">
       <h3>Все главы сразу <span style="font-size:12px;background:var(--navy-bg);color:var(--navy);padding:2px 8px;border-radius:10px;">Рекомендуется</span></h3>
       <div class="desc">Генерирует главы 0, 1, 2 и 6 за один запрос. Возвращает единый ZIP-архив с DOCX, JSON и логами.</div>
-      <div class="upload-area" id="drop-all" ondragover="onDrag(event,'drop-all')" ondragleave="offDrag('drop-all')" ondrop="onDrop(event,'file-all','drop-all')">
+      <div class="upload-area" id="drop-all"
+           ondragover="onDrag(event,'drop-all')"
+           ondragleave="offDrag('drop-all')"
+           ondrop="onDrop(event,'file-all','drop-all')">
         <input type="file" id="file-all" accept=".zip,.rar" onchange="onFileSelect('file-all','name-all')" />
         <div class="icon">📦</div>
         <div class="label">Перетащите ZIP или RAR-архив сюда или нажмите для выбора</div>
@@ -287,7 +297,10 @@
         <span>Сгенерировать все главы</span>
       </button>
       <div class="status" id="status-all"></div>
-      <div class="progress-bar" id="progress-all"><div class="fill"></div></div>
+      <div class="progress-wrap" id="progress-all">
+        <div class="progress-label"><span id="plabel-all">Обработка...</span><span id="ppct-all">0%</span></div>
+        <div class="progress-bar"><div class="fill" id="pfill-all"></div></div>
+      </div>
     </div>
 
     <!-- INDIVIDUAL CHAPTERS -->
@@ -297,53 +310,73 @@
       <div class="chapter-card">
         <h4>Глава 0 — Аннотация и введение</h4>
         <div class="ch-desc">Базовые сведения, аннотация, вводные формулировки и общие проектные данные.</div>
-        <div class="upload-area" style="padding:14px" id="drop-ch0" ondragover="onDrag(event,'drop-ch0')" ondragleave="offDrag('drop-ch0')" ondrop="onDrop(event,'file-ch0','drop-ch0')">
+        <div class="upload-area" style="padding:14px" id="drop-ch0"
+             ondragover="onDrag(event,'drop-ch0')" ondragleave="offDrag('drop-ch0')"
+             ondrop="onDrop(event,'file-ch0','drop-ch0')">
           <input type="file" id="file-ch0" accept=".zip,.rar" onchange="onFileSelect('file-ch0','name-ch0')" />
           <div class="label">Выберите ZIP / RAR</div>
           <div class="filename" id="name-ch0"></div>
         </div>
         <button class="btn" onclick="generate('chapter0')" id="btn-chapter0" style="padding:9px 16px;font-size:13px;">Генерировать</button>
         <div class="status" id="status-chapter0"></div>
-        <div class="progress-bar" id="progress-chapter0"><div class="fill"></div></div>
+        <div class="progress-wrap" id="progress-chapter0">
+          <div class="progress-label"><span id="plabel-chapter0">Обработка...</span><span id="ppct-chapter0">0%</span></div>
+          <div class="progress-bar"><div class="fill" id="pfill-chapter0"></div></div>
+        </div>
       </div>
 
       <div class="chapter-card">
         <h4>Глава 1 — Общие сведения об объекте</h4>
         <div class="ch-desc">Характеристика объекта, данные из ПЗ, ПЗУ, АР и других смежных разделов.</div>
-        <div class="upload-area" style="padding:14px" id="drop-ch1" ondragover="onDrag(event,'drop-ch1')" ondragleave="offDrag('drop-ch1')" ondrop="onDrop(event,'file-ch1','drop-ch1')">
+        <div class="upload-area" style="padding:14px" id="drop-ch1"
+             ondragover="onDrag(event,'drop-ch1')" ondragleave="offDrag('drop-ch1')"
+             ondrop="onDrop(event,'file-ch1','drop-ch1')">
           <input type="file" id="file-ch1" accept=".zip,.rar" onchange="onFileSelect('file-ch1','name-ch1')" />
           <div class="label">Выберите ZIP / RAR</div>
           <div class="filename" id="name-ch1"></div>
         </div>
         <button class="btn" onclick="generate('chapter1')" id="btn-chapter1" style="padding:9px 16px;font-size:13px;">Генерировать</button>
         <div class="status" id="status-chapter1"></div>
-        <div class="progress-bar" id="progress-chapter1"><div class="fill"></div></div>
+        <div class="progress-wrap" id="progress-chapter1">
+          <div class="progress-label"><span id="plabel-chapter1">Обработка...</span><span id="ppct-chapter1">0%</span></div>
+          <div class="progress-bar"><div class="fill" id="pfill-chapter1"></div></div>
+        </div>
       </div>
 
       <div class="chapter-card">
         <h4>Глава 2 — Воздействие на земельные ресурсы</h4>
         <div class="ch-desc">Земельные ресурсы, ИГИ, гидрогеология, характеристики территории.</div>
-        <div class="upload-area" style="padding:14px" id="drop-ch2" ondragover="onDrag(event,'drop-ch2')" ondragleave="offDrag('drop-ch2')" ondrop="onDrop(event,'file-ch2','drop-ch2')">
+        <div class="upload-area" style="padding:14px" id="drop-ch2"
+             ondragover="onDrag(event,'drop-ch2')" ondragleave="offDrag('drop-ch2')"
+             ondrop="onDrop(event,'file-ch2','drop-ch2')">
           <input type="file" id="file-ch2" accept=".zip,.rar" onchange="onFileSelect('file-ch2','name-ch2')" />
           <div class="label">Выберите ZIP / RAR</div>
           <div class="filename" id="name-ch2"></div>
         </div>
         <button class="btn" onclick="generate('chapter2')" id="btn-chapter2" style="padding:9px 16px;font-size:13px;">Генерировать</button>
         <div class="status" id="status-chapter2"></div>
-        <div class="progress-bar" id="progress-chapter2"><div class="fill"></div></div>
+        <div class="progress-wrap" id="progress-chapter2">
+          <div class="progress-label"><span id="plabel-chapter2">Обработка...</span><span id="ppct-chapter2">0%</span></div>
+          <div class="progress-bar"><div class="fill" id="pfill-chapter2"></div></div>
+        </div>
       </div>
 
       <div class="chapter-card">
         <h4>Глава 6 — Воздействие на растительный и животный мир</h4>
         <div class="ch-desc">Оценка воздействия на биоту по данным ИЭИ и смежных разделов.</div>
-        <div class="upload-area" style="padding:14px" id="drop-ch6" ondragover="onDrag(event,'drop-ch6')" ondragleave="offDrag('drop-ch6')" ondrop="onDrop(event,'file-ch6','drop-ch6')">
+        <div class="upload-area" style="padding:14px" id="drop-ch6"
+             ondragover="onDrag(event,'drop-ch6')" ondragleave="offDrag('drop-ch6')"
+             ondrop="onDrop(event,'file-ch6','drop-ch6')">
           <input type="file" id="file-ch6" accept=".zip,.rar" onchange="onFileSelect('file-ch6','name-ch6')" />
           <div class="label">Выберите ZIP / RAR</div>
           <div class="filename" id="name-ch6"></div>
         </div>
         <button class="btn" onclick="generate('chapter6')" id="btn-chapter6" style="padding:9px 16px;font-size:13px;">Генерировать</button>
         <div class="status" id="status-chapter6"></div>
-        <div class="progress-bar" id="progress-chapter6"><div class="fill"></div></div>
+        <div class="progress-wrap" id="progress-chapter6">
+          <div class="progress-label"><span id="plabel-chapter6">Обработка...</span><span id="ppct-chapter6">0%</span></div>
+          <div class="progress-bar"><div class="fill" id="pfill-chapter6"></div></div>
+        </div>
       </div>
 
     </div>
@@ -451,7 +484,7 @@
 <script>
 const BASE = '';
 
-// Health check
+// ── Health check ──────────────────────────────────────────────────────────────
 async function checkHealth() {
   try {
     const r = await fetch(BASE + '/health');
@@ -469,6 +502,7 @@ async function checkHealth() {
 }
 checkHealth();
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -476,128 +510,158 @@ function switchTab(name, btn) {
   btn.classList.add('active');
 }
 
+// ── File input helpers ────────────────────────────────────────────────────────
 function onFileSelect(inputId, nameId) {
   const f = document.getElementById(inputId).files[0];
   if (f) document.getElementById(nameId).textContent = '📎 ' + f.name;
 }
-
-function onDrag(e, areaId) {
-  e.preventDefault();
-  document.getElementById(areaId).classList.add('drag');
-}
-function offDrag(areaId) {
-  document.getElementById(areaId).classList.remove('drag');
-}
+function onDrag(e, areaId) { e.preventDefault(); document.getElementById(areaId).classList.add('drag'); }
+function offDrag(areaId) { document.getElementById(areaId).classList.remove('drag'); }
 function onDrop(e, inputId, areaId) {
-  e.preventDefault();
-  offDrag(areaId);
+  e.preventDefault(); offDrag(areaId);
   const f = e.dataTransfer.files[0];
   if (f) {
-    const dt = new DataTransfer();
-    dt.items.add(f);
+    const dt = new DataTransfer(); dt.items.add(f);
     document.getElementById(inputId).files = dt.files;
-    const nameId = inputId.replace('file-', 'name-');
-    document.getElementById(nameId).textContent = '📎 ' + f.name;
+    document.getElementById(inputId.replace('file-', 'name-')).textContent = '📎 ' + f.name;
   }
 }
 
-function getFileInput(endpoint) {
-  if (endpoint === 'all') return document.getElementById('file-all');
-  const map = {
-    'chapter0': 'file-ch0',
-    'chapter1': 'file-ch1',
-    'chapter2': 'file-ch2',
-    'chapter6': 'file-ch6',
-  };
-  return document.getElementById(map[endpoint]);
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function getFileInput(ep) {
+  if (ep === 'all') return document.getElementById('file-all');
+  return document.getElementById({ chapter0:'file-ch0', chapter1:'file-ch1', chapter2:'file-ch2', chapter6:'file-ch6' }[ep]);
 }
-
-function setStatus(endpoint, cls, msg) {
-  const el = document.getElementById('status-' + endpoint);
-  el.className = 'status ' + cls;
-  el.innerHTML = msg;
+function setStatus(ep, cls, msg) {
+  const el = document.getElementById('status-' + ep);
+  el.className = 'status ' + cls; el.innerHTML = msg;
 }
-
-function setProgress(endpoint, active) {
-  const el = document.getElementById('progress-' + endpoint);
-  if (active) el.classList.add('active');
-  else el.classList.remove('active');
+function setProgress(ep, active, pct, label) {
+  const wrap = document.getElementById('progress-' + ep);
+  if (!active) { wrap.classList.remove('active'); return; }
+  wrap.classList.add('active');
+  if (pct !== undefined) {
+    document.getElementById('pfill-' + ep).style.width = pct + '%';
+    document.getElementById('ppct-' + ep).textContent = pct + '%';
+  }
+  if (label !== undefined) document.getElementById('plabel-' + ep).textContent = label;
 }
-
-function setBtn(endpoint, loading) {
-  const id = endpoint === 'all' ? 'btn-all' : 'btn-' + endpoint;
+function setBtn(ep, loading) {
+  const id = ep === 'all' ? 'btn-all' : 'btn-' + ep;
   const btn = document.getElementById(id);
+  btn.disabled = loading;
   if (loading) {
-    btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Обработка...';
   } else {
-    btn.disabled = false;
-    if (endpoint === 'all') {
-      btn.innerHTML = '<span>Сгенерировать все главы</span>';
-    } else {
-      btn.innerHTML = 'Генерировать';
-    }
+    btn.innerHTML = ep === 'all' ? '<span>Сгенерировать все главы</span>' : 'Генерировать';
   }
 }
 
-async function generate(endpoint) {
-  const fileInput = getFileInput(endpoint);
+// ── Прогресс-анимация во время polling ───────────────────────────────────────
+// Плавно движется от 5% до 90% за ~5 минут, чтобы показать активность
+function makeProgressAnimator(ep) {
+  let pct = 5;
+  const steps = [
+    { to: 20, label: 'Индексируем документы...',   delay: 8000 },
+    { to: 40, label: 'Строим векторный индекс...',  delay: 20000 },
+    { to: 60, label: 'Запрашиваем языковую модель...', delay: 40000 },
+    { to: 80, label: 'Формируем документ...',       delay: 60000 },
+    { to: 90, label: 'Финальная обработка...',      delay: 90000 },
+  ];
+  let timers = [];
+  steps.forEach(s => {
+    timers.push(setTimeout(() => {
+      pct = s.to;
+      setProgress(ep, true, pct, s.label);
+    }, s.delay));
+  });
+  return () => timers.forEach(clearTimeout);
+}
+
+// ── Polling задачи ────────────────────────────────────────────────────────────
+async function pollTask(ep, taskId) {
+  const cancelAnim = makeProgressAnimator(ep);
+  const INTERVAL = 3000;   // опрос каждые 3 сек
+  const MAX_WAIT  = 900000; // 15 минут максимум
+  const started   = Date.now();
+
+  return new Promise((resolve) => {
+    const timer = setInterval(async () => {
+      if (Date.now() - started > MAX_WAIT) {
+        clearInterval(timer); cancelAnim();
+        setStatus(ep, 'error', 'Превышено время ожидания (15 мин). Попробуйте снова.');
+        setProgress(ep, false); setBtn(ep, false);
+        resolve(false); return;
+      }
+      try {
+        const r = await fetch(BASE + '/task/' + taskId + '/status');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        if (d.status === 'done') {
+          clearInterval(timer); cancelAnim();
+          setProgress(ep, true, 100, 'Готово!');
+          // Скачиваем файл
+          const dlResp = await fetch(BASE + '/task/' + taskId + '/download');
+          if (!dlResp.ok) {
+            const err = await dlResp.json().catch(() => ({ detail: 'Ошибка скачивания' }));
+            throw new Error(err.detail || 'Ошибка скачивания');
+          }
+          const blob = await dlResp.blob();
+          const filename = d.filename || 'result.zip';
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+          URL.revokeObjectURL(url);
+          setStatus(ep, 'success',
+            `Готово! Файл <strong>${filename}</strong> скачивается.<br>
+             <small>Откройте DOCX-файлы в Microsoft Word для проверки и редактирования.</small>`);
+          setTimeout(() => setProgress(ep, false), 2000);
+          setBtn(ep, false); resolve(true);
+        } else if (d.status === 'error') {
+          clearInterval(timer); cancelAnim();
+          setStatus(ep, 'error', 'Ошибка: ' + (d.error || d.message || 'неизвестная ошибка'));
+          setProgress(ep, false); setBtn(ep, false); resolve(false);
+        }
+        // pending / running — продолжаем ждать
+      } catch(e) {
+        // Не прерываем polling при единичной сетевой ошибке
+        console.warn('poll error:', e.message);
+      }
+    }, INTERVAL);
+  });
+}
+
+// ── Основная функция генерации ────────────────────────────────────────────────
+async function generate(ep) {
+  const fileInput = getFileInput(ep);
   if (!fileInput || !fileInput.files[0]) {
-    setStatus(endpoint, 'error', 'Выберите ZIP или RAR-архив с документами.');
+    setStatus(ep, 'error', 'Выберите ZIP или RAR-архив с документами.');
     return;
   }
-
   const file = fileInput.files[0];
-  const url = endpoint === 'all' ? '/chapters/all' : '/' + endpoint;
+  const url = ep === 'all' ? '/chapters/all' : '/' + ep;
 
-  setBtn(endpoint, true);
-  setStatus(endpoint, 'loading', 'Загружаем архив и запускаем обработку... Это может занять несколько минут.');
-  setProgress(endpoint, true);
+  setBtn(ep, true);
+  setStatus(ep, 'loading', 'Загружаем архив на сервер...');
+  setProgress(ep, true, 3, 'Загружаем архив...');
 
   const form = new FormData();
   form.append('project_parts_zip', file);
 
   try {
     const resp = await fetch(BASE + url, { method: 'POST', body: form });
-
     if (!resp.ok) {
-      let errMsg = `HTTP ${resp.status}`;
-      try {
-        const errData = await resp.json();
-        errMsg = errData.detail || JSON.stringify(errData);
-      } catch(e) {
-        try { errMsg = await resp.text(); } catch(e2) {}
-      }
-      setStatus(endpoint, 'error', 'Ошибка: ' + errMsg);
-      setProgress(endpoint, false);
-      setBtn(endpoint, false);
-      return;
+      let errMsg = 'HTTP ' + resp.status;
+      try { const d = await resp.json(); errMsg = d.detail || JSON.stringify(d); } catch(e) {}
+      setStatus(ep, 'error', 'Ошибка: ' + errMsg);
+      setProgress(ep, false); setBtn(ep, false); return;
     }
-
-    const blob = await resp.blob();
-    const disposition = resp.headers.get('Content-Disposition') || '';
-    let filename = 'result.zip';
-    const match = disposition.match(/filename=([^;]+)/);
-    if (match) filename = match[1].replace(/"/g, '');
-
-    const dlUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = dlUrl;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(dlUrl);
-
-    setStatus(endpoint, 'success',
-      `Готово! Файл <strong>${filename}</strong> скачивается.<br>
-       <small>Откройте DOCX-файлы в Microsoft Word для проверки и редактирования.</small>`
-    );
-    setProgress(endpoint, false);
-    setBtn(endpoint, false);
-
+    const { task_id } = await resp.json();
+    setStatus(ep, 'info', 'Задача запущена. Генерация займёт несколько минут — страницу закрывать не нужно.');
+    setProgress(ep, true, 5, 'Запускаем обработку...');
+    await pollTask(ep, task_id);
   } catch(e) {
-    setStatus(endpoint, 'error', 'Ошибка соединения: ' + e.message);
-    setProgress(endpoint, false);
-    setBtn(endpoint, false);
+    setStatus(ep, 'error', 'Ошибка соединения: ' + e.message);
+    setProgress(ep, false); setBtn(ep, false);
   }
 }
 </script>
