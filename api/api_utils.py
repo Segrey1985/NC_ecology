@@ -18,7 +18,12 @@ from main import main as run_main
 from main_base import main as run_main_base
 from src.utils.logger import logger
 from src.utils.utils import is_valid_uuid4_hex, file_hash
-from src.utils.validators import validate_docx, validate_json, validate_zip
+from src.utils.validators import (
+    validate_docx,
+    validate_json,
+    validate_zip,
+    normalize_archive_to_zip,
+)
 from src.mongo.user_collections import allocate_qdrant_collection, find_qdrant_collection_by_hash
 
 
@@ -287,7 +292,8 @@ async def generate_chapter(
         zip_name: str | None = None
         
         if project_parts_zip is not None:
-            project_parts_zip_bytes = await project_parts_zip.read()
+            # Нормализуем архив (RAR → ZIP при необходимости) перед пайплайном
+            project_parts_zip_bytes = await normalize_archive_to_zip(project_parts_zip)
             zip_hash = file_hash(project_parts_zip_bytes)
             zip_name = project_parts_zip.filename
         
@@ -444,7 +450,8 @@ async def generate_all_chapters(
             zip_hash: str | None = None
             
             if project_parts_zip is not None:
-                project_parts_zip_bytes = await project_parts_zip.read()
+                # Нормализуем архив (RAR → ZIP при необходимости) перед пайплайном
+                project_parts_zip_bytes = await normalize_archive_to_zip(project_parts_zip)
                 zip_hash = file_hash(project_parts_zip_bytes)
             
             collection_name = await resolve_collection_name(

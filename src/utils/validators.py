@@ -10,37 +10,204 @@ from pydantic import BaseModel
 
 from src.utils.logger import logger
 
+try:
+    import rarfile  # опциональная зависимость для поддержки RAR
 
-async def validate_zip(file: UploadFile):
-    # Быстрая проверка по заголовку (magic bytes) и расширению
-    header = await file.read(4)
-    await file.seek(0)
+    _RARFILE_AVAILABLE = True
+except Exception:  # библиотека может быть не установлена
+    rarfile = None
+    _RARFILE_AVAILABLE = False
 
-    if not (
-        file.content_type in {"application/zip", "application/x-zip-compressed"}
-        or Path(file.filename).suffix.lower() == ".zip"
-        or header.startswith(b"PK")
+# Magic bytes для определения типа архива
+_ZIP_MAGIC = b"PK\x03\x04"
+_ZIP_EMPTY_MAGIC = b"PK\x05\x06"  # пустой zip
+_RAR4_MAGIC = b"Rar!\x1a\x07\x00"
+_RAR5_MAGIC = b"Rar!\x1a\x07\x01\x00"
+
+MAX_ARCHIVE_BYTES = 200 * 1024 * 1024  # 200 MB — лимит на размер архива
+MAX_UNCOMPRESSED_BYTES = 800 * 1024 * 1024  # 800 MB — лимит на распаковку
+MAX_FILES = 5000
+
+
+def detect_archive_type(data: bytes) -> str | None:
+    """Определяет тип архива по сигнатуре: 'zip', 'rar' или None."""
+    if data.startswith(_ZIP_MAGIC) or data.startswith(_ZIP_EMPTY_MAGIC):
+        return "zip"
+    if data.startswith(_RAR4_MAGIC) or data.startswith(_RAR5_MAGIC):
+        return "rar"
+    return None
+
+
+def _is_safe_member_path(name: str) -> bool:
+    """Проверяет путь внутри архива от zip-slip / абсолютных путей."""
+    name = name.replace("\\", "/")
+    normalized = posix_normpath(name).lstrip("/")
+    if (
+        normalized.startswith("..")
+        or name.startswith(("/", "\\"))
+        or re.match(r"^[A-Za-z]:", normalized) is not None
     ):
-        raise HTTPException(
-            status_code=400, detail=f"{file.filename} не является ZIP-архивом"
-        )
+        return False
+    return True
 
-    data = await file.read()
-    await file.seek(0)
 
-    if not data:
-        raise HTTPException(
-            status_code=400, detail=f"{file.filename}: пустой ZIP-архив"
-        )
+def rar_bytes_to_zip_bytes(data: bytes, filename: str = "archive.rar") -> bytes:
+    """Конвертирует RAR-архив (байты) в ZIP-архив (байты).
 
-    # Страховка от случайных гигантских загрузок/zip-bomb.
-    # Если потребуется — вынесем лимиты в конфиг.
-    max_zip_bytes = 200 * 1024 * 1024  # 200 MB
-    if len(data) > max_zip_bytes:
+    Позволяет остальному пайплайну работать только с ZIP, не зная о RAR.
+    Использует библиотеку rarfile (под капотом — системная утилита unrar).
+    """
+    if not _RARFILE_AVAILABLE:
         raise HTTPException(
             status_code=400,
-            detail=f"{file.filename}: ZIP-архив слишком большой (>{max_zip_bytes} байт)",
+            detail=(
+                f"{filename}: поддержка RAR недоступна (не установлены "
+                "библиотека rarfile и/или утилита unrar)"
+            ),
         )
+
+    try:
+        rf = rarfile.RarFile(io.BytesIO(data))
+    except rarfile.NeedFirstVolume as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{filename}: это не первый том многотомного RAR-архива",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{filename}: повреждённый или некорректный RAR ({type(e).__name__}: {e})",
+        ) from e
+
+    try:
+        if rf.needs_password():
+            raise HTTPException(
+                status_code=400,
+                detail=f"{filename}: зашифрованные RAR-архивы не поддерживаются",
+            )
+
+        infos = rf.infolist()
+        if not infos:
+            raise HTTPException(
+                status_code=400, detail=f"{filename}: RAR-архив пуст"
+            )
+        if len(infos) > MAX_FILES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{filename}: слишком много файлов в архиве (>{MAX_FILES})",
+            )
+
+        total_uncompressed = 0
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for info in infos:
+                name = info.filename
+                if not _is_safe_member_path(name):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{filename}: небезопасный путь внутри RAR: {name}",
+                    )
+                if getattr(info, "isdir", lambda: False)():
+                    continue
+                total_uncompressed += int(getattr(info, "file_size", 0) or 0)
+                if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"{filename}: слишком большой распакованный размер "
+                            f"(>{MAX_UNCOMPRESSED_BYTES} байт)"
+                        ),
+                    )
+                with rf.open(info) as src:
+                    zf.writestr(name.replace("\\", "/"), src.read())
+
+        zip_buf.seek(0)
+        logger.info(
+            f"{filename}: RAR успешно сконвертирован в ZIP "
+            f"({len(infos)} записей, {total_uncompressed} байт)"
+        )
+        return zip_buf.getvalue()
+    finally:
+        try:
+            rf.close()
+        except Exception:
+            pass
+
+
+async def normalize_archive_to_zip(file: UploadFile) -> bytes:
+    """Читает загруженный архив и возвращает его байты в формате ZIP.
+
+    Если архив уже ZIP — возвращает как есть; если RAR — конвертирует.
+    Используется в API перед передачей архива в пайплайн.
+    """
+    data = await file.read()
+    await file.seek(0)
+    if not data:
+        raise HTTPException(
+            status_code=400, detail=f"{file.filename}: пустой архив"
+        )
+    if len(data) > MAX_ARCHIVE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{file.filename}: архив слишком большой (>{MAX_ARCHIVE_BYTES} байт)",
+        )
+
+    kind = detect_archive_type(data)
+    if kind == "rar" or (kind is None and Path(file.filename or "").suffix.lower() == ".rar"):
+        return rar_bytes_to_zip_bytes(data, file.filename or "archive.rar")
+    # По умолчанию считаем ZIP — возвращаем как есть
+    return data
+
+
+async def validate_zip(file: UploadFile):
+    """Валидирует загруженный архив (ZIP или RAR).
+
+    RAR предварительно конвертируется в ZIP в памяти, после чего проходит
+    те же проверки, что и обычный ZIP (наличие PDF, лимиты, zip-slip).
+    """
+    # Быстрая проверка по заголовку (magic bytes) и расширению
+    header = await file.read(8)
+    await file.seek(0)
+
+    suffix = Path(file.filename or "").suffix.lower()
+    is_zip_like = (
+        file.content_type in {"application/zip", "application/x-zip-compressed"}
+        or suffix == ".zip"
+        or header.startswith(b"PK")
+    )
+    is_rar_like = (
+        file.content_type in {"application/x-rar-compressed", "application/vnd.rar"}
+        or suffix == ".rar"
+        or header.startswith(_RAR4_MAGIC)
+        or header.startswith(_RAR5_MAGIC)
+    )
+
+    if not (is_zip_like or is_rar_like):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{file.filename} не является ZIP- или RAR-архивом",
+        )
+
+    raw = await file.read()
+    await file.seek(0)
+
+    if not raw:
+        raise HTTPException(
+            status_code=400, detail=f"{file.filename}: пустой архив"
+        )
+
+    max_zip_bytes = MAX_ARCHIVE_BYTES  # 200 MB
+    if len(raw) > max_zip_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{file.filename}: архив слишком большой (>{max_zip_bytes} байт)",
+        )
+
+    # Если это RAR — конвертируем в ZIP и дальше валидируем как ZIP
+    if detect_archive_type(raw) == "rar" or (detect_archive_type(raw) is None and is_rar_like):
+        data = rar_bytes_to_zip_bytes(raw, file.filename or "archive.rar")
+    else:
+        data = raw
 
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:

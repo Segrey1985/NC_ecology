@@ -10,6 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# 0. Системные зависимости (unar нужен для поддержки RAR-архивов;
+#    unar свободен и доступен в основном репозитории Debian, в отличие от unrar)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends unar \
+  && rm -rf /var/lib/apt/lists/*
+
 # 1. Копируем бинарный файл uv из официального образа
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
