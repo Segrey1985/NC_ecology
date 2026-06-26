@@ -631,7 +631,7 @@ async function pollTask(ep, taskId) {
 }
 
 // ── Основная функция генерации ────────────────────────────────────────────────
-async function generate(ep) {
+function generate(ep) {
   const fileInput = getFileInput(ep);
   if (!fileInput || !fileInput.files[0]) {
     setStatus(ep, 'error', 'Выберите ZIP или RAR-архив с документами.');
@@ -642,27 +642,58 @@ async function generate(ep) {
 
   setBtn(ep, true);
   setStatus(ep, 'loading', 'Загружаем архив на сервер...');
-  setProgress(ep, true, 3, 'Загружаем архив...');
+  setProgress(ep, true, 1, 'Загружаем архив...');
 
   const form = new FormData();
   form.append('project_parts_zip', file);
 
-  try {
-    const resp = await fetch(BASE + url, { method: 'POST', body: form });
-    if (!resp.ok) {
-      let errMsg = 'HTTP ' + resp.status;
-      try { const d = await resp.json(); errMsg = d.detail || JSON.stringify(d); } catch(e) {}
+  const xhr = new XMLHttpRequest();
+
+  // Реальный прогресс загрузки файла
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 50); // загрузка = 0..50%
+      const mb = (e.loaded / 1048576).toFixed(1);
+      const total = (e.total / 1048576).toFixed(1);
+      setProgress(ep, true, pct, `Загружаем архив... ${mb} / ${total} МБ`);
+    }
+  };
+
+  xhr.upload.onload = function() {
+    setProgress(ep, true, 52, 'Архив получен, запускаем генерацию...');
+    setStatus(ep, 'loading', 'Архив загружен. Запускаем генерацию...');
+  };
+
+  xhr.onload = function() {
+    if (xhr.status < 200 || xhr.status >= 300) {
+      let errMsg = 'HTTP ' + xhr.status;
+      try { const d = JSON.parse(xhr.responseText); errMsg = d.detail || JSON.stringify(d); } catch(e) {}
       setStatus(ep, 'error', 'Ошибка: ' + errMsg);
       setProgress(ep, false); setBtn(ep, false); return;
     }
-    const { task_id } = await resp.json();
+    let task_id;
+    try { task_id = JSON.parse(xhr.responseText).task_id; } catch(e) {
+      setStatus(ep, 'error', 'Ошибка разбора ответа сервера');
+      setProgress(ep, false); setBtn(ep, false); return;
+    }
     setStatus(ep, 'info', 'Задача запущена. Генерация займёт несколько минут — страницу закрывать не нужно.');
-    setProgress(ep, true, 5, 'Запускаем обработку...');
-    await pollTask(ep, task_id);
-  } catch(e) {
-    setStatus(ep, 'error', 'Ошибка соединения: ' + e.message);
+    setProgress(ep, true, 55, 'Запускаем обработку...');
+    pollTask(ep, task_id);
+  };
+
+  xhr.onerror = function() {
+    setStatus(ep, 'error', 'Ошибка соединения. Проверьте подключение к интернету.');
     setProgress(ep, false); setBtn(ep, false);
-  }
+  };
+
+  xhr.ontimeout = function() {
+    setStatus(ep, 'error', 'Превышено время загрузки файла. Попробуйте снова.');
+    setProgress(ep, false); setBtn(ep, false);
+  };
+
+  xhr.timeout = 600000; // 10 минут на загрузку файла
+  xhr.open('POST', BASE + url);
+  xhr.send(form);
 }
 </script>
 </body>

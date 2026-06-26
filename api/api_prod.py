@@ -30,7 +30,6 @@ from api.api_utils import (
     generate_chapter,
 )
 from api.session_middleware import add_session_middleware
-from api.concurrency_middleware import add_concurrency_middleware
 from api.task_manager import TaskStatus, task_manager
 from src.mongo.mongo_client import connect_mongo, disconnect_mongo
 
@@ -66,7 +65,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NC_ecology API", version="0.1.0", lifespan=lifespan)
-add_concurrency_middleware(app)
 add_session_middleware(app)
 
 
