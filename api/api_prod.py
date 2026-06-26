@@ -1,7 +1,9 @@
+import os
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Request
-
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from api.api_utils import (
     CHAPTER0,
     CHAPTER1,
@@ -14,19 +16,20 @@ from api.session_middleware import add_session_middleware
 from api.concurrency_middleware import add_concurrency_middleware
 from src.mongo.mongo_client import connect_mongo, disconnect_mongo
 
+# Каталог со статикой фронтенда (../static относительно api/)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_mongo()      # старт uvicorn / docker
     yield
     await disconnect_mongo()   # остановка приложения
-    
+
 
 app = FastAPI(title="NC_ecology API", version="0.1.0", lifespan=lifespan)
-
 # потом по куки блокируем
 add_concurrency_middleware(app)
-
 # сначала назначаем куки
 add_session_middleware(app)
 
@@ -50,7 +53,7 @@ def health():
 async def chapter0(
     request: Request,
     project_parts_zip: UploadFile | None = File(
-        None, description="[обязательно] Zip-архив с документами смежных разделов в формате pdf"
+        None, description="[обязательно] Архив (ZIP или RAR) с документами смежных разделов в формате pdf"
     ),
 ):
     return await generate_chapter(
@@ -69,7 +72,7 @@ async def chapter0(
 async def chapter1(
     request: Request,
     project_parts_zip: UploadFile | None = File(
-        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+        None, description="[обязательно] Архив (ZIP или RAR) с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
@@ -88,7 +91,7 @@ async def chapter1(
 async def chapter2(
     request: Request,
     project_parts_zip: UploadFile | None = File(
-        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+        None, description="[обязательно] Архив (ZIP или RAR) с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
@@ -107,7 +110,7 @@ async def chapter2(
 async def chapter6(
     request: Request,
     project_parts_zip: UploadFile | None = File(
-        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+        None, description="[обязательно] Архив (ZIP или RAR) с PDF смежных разделов"
     ),
 ):
     return await generate_chapter(
@@ -129,13 +132,28 @@ async def chapter6(
 async def chapters_all(
     request: Request,
     project_parts_zip: UploadFile | None = File(
-        None, description="[обязательно] Zip-архив с PDF смежных разделов"
+        None, description="[обязательно] Архив (ZIP или RAR) с PDF смежных разделов"
     ),
 ):
     return await generate_all_chapters(
         request=request,
         project_parts_zip=project_parts_zip
     )
+
+
+# ── Фронтенд (веб-интерфейс) ──────────────────────────────────────────────────
+# Корневая страница отдаёт index.html из каталога static.
+@app.get("/", include_in_schema=False)
+async def index():
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return {"detail": "Фронтенд не найден. Откройте /docs для работы с API."}
+
+
+# Раздача статических ресурсов (если появятся css/js/изображения).
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 if __name__ == "__main__":

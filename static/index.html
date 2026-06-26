@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NC_ecology — Автоматизация раздела ООС</title>
+  <style>
+    :root {
+      --navy: #0d2b54;          /* тёмно-синий основной */
+      --navy-dark: #081f3e;     /* глубокий тёмно-синий (hover) */
+      --navy-light: #1c4a86;    /* светлее синий (акценты) */
+      --navy-accent: #2f6fc0;   /* яркий синий */
+      --navy-bg: #eaf1fb;       /* очень светлый сине-белый фон зон */
+      --navy-border: #b9cdec;   /* светло-синяя рамка */
+      --gray: #5a6b80;
+      --gray-light: #eef2f7;
+      --white: #ffffff;
+      --shadow: 0 2px 12px rgba(13,43,84,0.10);
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f7fc;
+      color: #1a2738;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+      color: white;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 10px rgba(8,31,62,0.35);
+    }
+    header .logo { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+    header .subtitle { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+    header .badge {
+      margin-left: auto;
+      background: rgba(255,255,255,0.18);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
+
+    .info-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--navy-accent);
+    }
+    .info-card h2 { font-size: 16px; color: var(--navy); margin-bottom: 8px; }
+    .info-card p { font-size: 14px; color: var(--gray); line-height: 1.6; }
+
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card h3 {
+      font-size: 17px;
+      color: var(--navy);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card .desc { font-size: 13px; color: var(--gray); margin-bottom: 16px; }
+
+    .upload-area {
+      border: 2px dashed var(--navy-border);
+      border-radius: 8px;
+      background: var(--navy-bg);
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .upload-area:hover, .upload-area.drag { border-color: var(--navy-accent); background: #dde9fa; }
+    .upload-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-area .icon { font-size: 36px; margin-bottom: 8px; }
+    .upload-area .label { font-size: 14px; color: var(--gray); }
+    .upload-area .filename { font-size: 13px; color: var(--navy); font-weight: 600; margin-top: 6px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--navy);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: background 0.2s, transform 0.1s;
+      width: 100%;
+      justify-content: center;
+    }
+    .btn:hover { background: var(--navy-dark); }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { background: #9aa7b8; cursor: not-allowed; }
+
+    .status {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .status.info { background: var(--navy-bg); color: var(--navy-light); border: 1px solid var(--navy-border); display: block; }
+    .status.success { background: #e6f2ec; color: #1b6b46; border: 1px solid #a7d3bd; display: block; }
+    .status.error { background: #fdecec; color: #b4242b; border: 1px solid #f0b3b6; display: block; }
+    .status.loading { background: var(--navy-bg); color: var(--navy); border: 1px solid var(--navy-border); display: block; }
+
+    .progress-bar {
+      height: 6px;
+      background: #dbe4f0;
+      border-radius: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar.active { display: block; }
+    .progress-bar .fill {
+      height: 100%;
+      background: var(--navy-accent);
+      border-radius: 3px;
+      animation: progress 2s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { width: 5%; }
+      50% { width: 80%; }
+      100% { width: 95%; }
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--navy-accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      text-decoration: none;
+    }
+    .download-btn:hover { background: var(--navy); }
+
+    .chapters-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 600px) { .chapters-grid { grid-template-columns: 1fr; } }
+
+    .chapter-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      border-top: 3px solid var(--navy-accent);
+    }
+    .chapter-card h4 { font-size: 14px; color: var(--navy); margin-bottom: 4px; }
+    .chapter-card .ch-desc { font-size: 12px; color: var(--gray); margin-bottom: 12px; line-height: 1.5; }
+
+    .naming-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .naming-table th {
+      background: var(--navy-bg);
+      color: var(--navy);
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 2px solid var(--navy-border);
+    }
+    .naming-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #2c3a4d;
+    }
+    .naming-table tr:last-child td { border-bottom: none; }
+    .naming-table code {
+      background: var(--gray-light);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: monospace;
+      color: var(--navy-light);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--navy-border);
+    }
+    .tab {
+      padding: 10px 20px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray);
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: #8294ab;
+      font-size: 12px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">NC_ecology</div>
+    <div class="subtitle">Автоматизированная подготовка раздела ООС</div>
+  </div>
+  <div class="badge" id="health-badge">Проверка...</div>
+</header>
+
+<div class="container">
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('generate', this)">Генерация документов</button>
+    <button class="tab" onclick="switchTab('guide', this)">Инструкция</button>
+    <button class="tab" onclick="switchTab('about', this)">О системе</button>
+  </div>
+
+  <!-- TAB: GENERATE -->
+  <div class="tab-content active" id="tab-generate">
+
+    <div class="info-card">
+      <h2>Как использовать</h2>
+      <p>Загрузите архив (ZIP или RAR) со смежными разделами проектной документации в формате PDF. Файлы должны быть переименованы согласно Постановлению № 87 (префиксы разделов). Система автоматически извлечёт данные и сформирует главы раздела ООС.</p>
+    </div>
+
+    <!-- ALL CHAPTERS -->
+    <div class="card">
+      <h3>Все главы сразу <span style="font-size:12px;background:var(--navy-bg);color:var(--navy);padding:2px 8px;border-radius:10px;">Рекомендуется</span></h3>
+      <div class="desc">Генерирует главы 0, 1, 2 и 6 за один запрос. Возвращает единый ZIP-архив с DOCX, JSON и логами.</div>
+      <div class="upload-area" id="drop-all" ondragover="onDrag(event,'drop-all')" ondragleave="offDrag('drop-all')" ondrop="onDrop(event,'file-all','drop-all')">
+        <input type="file" id="file-all" accept=".zip,.rar" onchange="onFileSelect('file-all','name-all')" />
+        <div class="icon">📦</div>
+        <div class="label">Перетащите ZIP или RAR-архив сюда или нажмите для выбора</div>
+        <div class="filename" id="name-all"></div>
+      </div>
+      <button class="btn" onclick="generate('all')" id="btn-all">
+        <span>Сгенерировать все главы</span>
+      </button>
+      <div class="status" id="status-all"></div>
+      <div class="progress-bar" id="progress-all"><div class="fill"></div></div>
+    </div>
+
+    <!-- INDIVIDUAL CHAPTERS -->
+    <h3 style="margin-bottom:14px;color:var(--gray);font-size:15px;">Или выберите отдельную главу:</h3>
+    <div class="chapters-grid">
+
+      <div class="chapter-card">
+        <h4>Глава 0 — Аннотация и введение</h4>
+        <div class="ch-desc">Базовые сведения, аннотация, вводные формулировки и общие проектные данные.</div>
+        <div class="upload-area" style="padding:14px" id="drop-ch0" ondragover="onDrag(event,'drop-ch0')" ondragleave="offDrag('drop-ch0')" ondrop="onDrop(event,'file-ch0','drop-ch0')">
+          <input type="file" id="file-ch0" accept=".zip,.rar" onchange="onFileSelect('file-ch0','name-ch0')" />
+          <div class="label">Выберите ZIP / RAR</div>
+          <div class="filename" id="name-ch0"></div>
+        </div>
+        <button class="btn" onclick="generate('chapter0')" id="btn-chapter0" style="padding:9px 16px;font-size:13px;">Генерировать</button>
+        <div class="status" id="status-chapter0"></div>
+        <div class="progress-bar" id="progress-chapter0"><div class="fill"></div></div>
+      </div>
+
+      <div class="chapter-card">
+        <h4>Глава 1 — Общие сведения об объекте</h4>
+        <div class="ch-desc">Характеристика объекта, данные из ПЗ, ПЗУ, АР и других смежных разделов.</div>
+        <div class="upload-area" style="padding:14px" id="drop-ch1" ondragover="onDrag(event,'drop-ch1')" ondragleave="offDrag('drop-ch1')" ondrop="onDrop(event,'file-ch1','drop-ch1')">
+          <input type="file" id="file-ch1" accept=".zip,.rar" onchange="onFileSelect('file-ch1','name-ch1')" />
+          <div class="label">Выберите ZIP / RAR</div>
+          <div class="filename" id="name-ch1"></div>
+        </div>
+        <button class="btn" onclick="generate('chapter1')" id="btn-chapter1" style="padding:9px 16px;font-size:13px;">Генерировать</button>
+        <div class="status" id="status-chapter1"></div>
+        <div class="progress-bar" id="progress-chapter1"><div class="fill"></div></div>
+      </div>
+
+      <div class="chapter-card">
+        <h4>Глава 2 — Воздействие на земельные ресурсы</h4>
+        <div class="ch-desc">Земельные ресурсы, ИГИ, гидрогеология, характеристики территории.</div>
+        <div class="upload-area" style="padding:14px" id="drop-ch2" ondragover="onDrag(event,'drop-ch2')" ondragleave="offDrag('drop-ch2')" ondrop="onDrop(event,'file-ch2','drop-ch2')">
+          <input type="file" id="file-ch2" accept=".zip,.rar" onchange="onFileSelect('file-ch2','name-ch2')" />
+          <div class="label">Выберите ZIP / RAR</div>
+          <div class="filename" id="name-ch2"></div>
+        </div>
+        <button class="btn" onclick="generate('chapter2')" id="btn-chapter2" style="padding:9px 16px;font-size:13px;">Генерировать</button>
+        <div class="status" id="status-chapter2"></div>
+        <div class="progress-bar" id="progress-chapter2"><div class="fill"></div></div>
+      </div>
+
+      <div class="chapter-card">
+        <h4>Глава 6 — Воздействие на растительный и животный мир</h4>
+        <div class="ch-desc">Оценка воздействия на биоту по данным ИЭИ и смежных разделов.</div>
+        <div class="upload-area" style="padding:14px" id="drop-ch6" ondragover="onDrag(event,'drop-ch6')" ondragleave="offDrag('drop-ch6')" ondrop="onDrop(event,'file-ch6','drop-ch6')">
+          <input type="file" id="file-ch6" accept=".zip,.rar" onchange="onFileSelect('file-ch6','name-ch6')" />
+          <div class="label">Выберите ZIP / RAR</div>
+          <div class="filename" id="name-ch6"></div>
+        </div>
+        <button class="btn" onclick="generate('chapter6')" id="btn-chapter6" style="padding:9px 16px;font-size:13px;">Генерировать</button>
+        <div class="status" id="status-chapter6"></div>
+        <div class="progress-bar" id="progress-chapter6"><div class="fill"></div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB: GUIDE -->
+  <div class="tab-content" id="tab-guide">
+    <div class="card">
+      <h3>Инструкция по подготовке архива</h3>
+      <div class="desc">Для корректной работы системы PDF-файлы смежных разделов должны быть переименованы согласно Постановлению Правительства РФ № 87.</div>
+
+      <p style="font-size:14px;color:var(--gray);margin-bottom:12px;"><strong>Шаг 1.</strong> Переименуйте PDF-файлы, добавив префикс раздела перед именем файла:</p>
+
+      <table class="naming-table">
+        <thead>
+          <tr><th>Префикс</th><th>Раздел</th><th>Пример имени файла</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>1_</code></td><td>Пояснительная записка (ПЗ)</td><td>1_Проект_ПЗ.pdf</td></tr>
+          <tr><td><code>2_</code></td><td>Схема планировочной организации (ПЗУ)</td><td>2_Проект_ПЗУ.pdf</td></tr>
+          <tr><td><code>3_</code></td><td>Архитектурные решения (АР)</td><td>3_Проект_АР.pdf</td></tr>
+          <tr><td><code>4_</code></td><td>Конструктивные решения (КР)</td><td>4_Проект_КР.pdf</td></tr>
+          <tr><td><code>5_</code></td><td>Инженерные системы (ИОС)</td><td>5_Проект_ИОС.pdf</td></tr>
+          <tr><td><code>5.1_</code></td><td>Система электроснабжения</td><td>5.1_Проект_ЭС.pdf</td></tr>
+          <tr><td><code>5.2_</code></td><td>Система водоснабжения</td><td>5.2_Проект_ВС.pdf</td></tr>
+          <tr><td><code>5.3_</code></td><td>Система водоотведения</td><td>5.3_Проект_ВО.pdf</td></tr>
+          <tr><td><code>5.4_</code></td><td>ОВИК</td><td>5.4_Проект_ОВИК.pdf</td></tr>
+          <tr><td><code>6.1_</code></td><td>Технологические решения (ТМ)</td><td>6.1_Проект_ТМ.pdf</td></tr>
+          <tr><td><code>7_</code></td><td>Проект организации строительства (ПОС)</td><td>7_Проект_ПОС.pdf</td></tr>
+          <tr><td><code>ИГИ_</code></td><td>Инженерно-геологические изыскания</td><td>ИГИ_Отчет.pdf</td></tr>
+          <tr><td><code>ИЭИ_</code></td><td>Инженерно-экологические изыскания</td><td>ИЭИ_Отчет.pdf</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:14px;color:var(--gray);margin-top:16px;"><strong>Шаг 2.</strong> Выделите все переименованные PDF-файлы → правый клик → «Добавить в архив» (ZIP или RAR).</p>
+      <p style="font-size:14px;color:var(--gray);margin-top:8px;"><strong>Шаг 3.</strong> Загрузите полученный архив в форму на вкладке «Генерация документов».</p>
+
+      <div style="background:var(--navy-bg);border:1px solid var(--navy-border);border-radius:8px;padding:14px;margin-top:16px;">
+        <p style="font-size:13px;color:var(--navy);"><strong>Ограничения:</strong></p>
+        <ul style="font-size:13px;color:var(--navy-light);margin-top:6px;padding-left:18px;line-height:1.8;">
+          <li>Максимальный размер архива: <strong>200 МБ</strong></li>
+          <li>Максимальный распакованный размер: <strong>800 МБ</strong></li>
+          <li>Максимальное количество файлов: <strong>5000</strong></li>
+          <li>Зашифрованные и многотомные архивы не поддерживаются</li>
+          <li>В архиве должен быть хотя бы один PDF-файл</li>
+          <li>Поддерживаются форматы архивов: <strong>ZIP и RAR</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Что вы получите на выходе</h3>
+      <div class="desc">После обработки система вернёт ZIP-архив с результатами. В зависимости от выбранной главы архив содержит:</div>
+      <ul style="font-size:14px;color:var(--gray);padding-left:20px;line-height:2;">
+        <li><strong>DOCX-файлы</strong> — готовые главы раздела ООС, открываются в Microsoft Word</li>
+        <li><strong>JSON-файлы</strong> — структурированные извлечённые данные для проверки</li>
+        <li><strong>Логи</strong> — служебные записи о ходе генерации</li>
+      </ul>
+      <div style="background:var(--navy-bg);border:1px solid var(--navy-border);border-radius:8px;padding:14px;margin-top:16px;">
+        <p style="font-size:13px;color:var(--navy);"><strong>Подсветка плейсхолдеров в DOCX:</strong></p>
+        <ul style="font-size:13px;color:var(--navy-light);margin-top:6px;padding-left:18px;line-height:1.8;">
+          <li><strong style="color:#1b6b46;">Зелёным</strong> выделены автоматически заполненные значения.</li>
+          <li><strong style="color:#b8860b;">Жёлтым</strong> выделены незаполненные поля, требующие ручного ввода.</li>
+          <li>Даты, колонтитулы и штамп заполняются автоматически.</li>
+        </ul>
+      </div>
+      <p style="font-size:13px;color:#b4242b;margin-top:12px;"><strong>Важно:</strong> Все сформированные документы требуют проверки и доработки специалистом. Система не заменяет эколога.</p>
+    </div>
+  </div>
+
+  <!-- TAB: ABOUT -->
+  <div class="tab-content" id="tab-about">
+    <div class="card">
+      <h3>О системе NC_ecology</h3>
+      <div class="desc">Программный инструмент для автоматизированной подготовки разделов экологической проектной документации (ПМООС / ООС).</div>
+      <p style="font-size:14px;color:var(--gray);line-height:1.8;margin-bottom:12px;">
+        Система использует подход <strong>RAG (Retrieval-Augmented Generation)</strong>: сначала ищет релевантные фрагменты в загруженных PDF-документах, затем передаёт найденный контекст языковой модели для формирования структурированного ответа.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Технический стек</h3>
+      <ul style="font-size:14px;color:var(--gray);padding-left:20px;line-height:2;">
+        <li><strong>Backend:</strong> FastAPI + LangGraph (RAG-пайплайн)</li>
+        <li><strong>Векторная БД:</strong> Qdrant (индексация PDF-фрагментов)</li>
+        <li><strong>БД сессий:</strong> MongoDB</li>
+        <li><strong>LLM:</strong> gpt-5-mini через OpenAI-совместимый API</li>
+        <li><strong>Эмбеддинги:</strong> paraphrase-multilingual-MiniLM-L12-v2 (локально)</li>
+        <li><strong>Reranker:</strong> cross-encoder/ms-marco-MiniLM-L-6-v2 (локально)</li>
+        <li><strong>Архивы:</strong> поддержка ZIP и RAR</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>API документация</h3>
+      <p style="font-size:14px;color:var(--gray);margin-bottom:12px;">Для прямой работы с API доступна интерактивная документация:</p>
+      <a href="/docs" target="_blank" class="download-btn" style="display:inline-flex;">Открыть Swagger UI</a>
+      &nbsp;
+      <a href="/redoc" target="_blank" class="download-btn" style="display:inline-flex;background:var(--gray);">Открыть ReDoc</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>NC_ecology v0.1.0 — Инструмент для автоматизации экологической проектной документации</footer>
+
+<script>
+const BASE = '';
+
+// Health check
+async function checkHealth() {
+  try {
+    const r = await fetch(BASE + '/health');
+    const d = await r.json();
+    const badge = document.getElementById('health-badge');
+    if (d.status === 'ok') {
+      badge.textContent = 'Сервис работает';
+      badge.style.background = 'rgba(255,255,255,0.25)';
+    } else {
+      badge.textContent = 'Ошибка сервиса';
+    }
+  } catch(e) {
+    document.getElementById('health-badge').textContent = 'Недоступен';
+  }
+}
+checkHealth();
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function onFileSelect(inputId, nameId) {
+  const f = document.getElementById(inputId).files[0];
+  if (f) document.getElementById(nameId).textContent = '📎 ' + f.name;
+}
+
+function onDrag(e, areaId) {
+  e.preventDefault();
+  document.getElementById(areaId).classList.add('drag');
+}
+function offDrag(areaId) {
+  document.getElementById(areaId).classList.remove('drag');
+}
+function onDrop(e, inputId, areaId) {
+  e.preventDefault();
+  offDrag(areaId);
+  const f = e.dataTransfer.files[0];
+  if (f) {
+    const dt = new DataTransfer();
+    dt.items.add(f);
+    document.getElementById(inputId).files = dt.files;
+    const nameId = inputId.replace('file-', 'name-');
+    document.getElementById(nameId).textContent = '📎 ' + f.name;
+  }
+}
+
+function getFileInput(endpoint) {
+  if (endpoint === 'all') return document.getElementById('file-all');
+  const map = {
+    'chapter0': 'file-ch0',
+    'chapter1': 'file-ch1',
+    'chapter2': 'file-ch2',
+    'chapter6': 'file-ch6',
+  };
+  return document.getElementById(map[endpoint]);
+}
+
+function setStatus(endpoint, cls, msg) {
+  const el = document.getElementById('status-' + endpoint);
+  el.className = 'status ' + cls;
+  el.innerHTML = msg;
+}
+
+function setProgress(endpoint, active) {
+  const el = document.getElementById('progress-' + endpoint);
+  if (active) el.classList.add('active');
+  else el.classList.remove('active');
+}
+
+function setBtn(endpoint, loading) {
+  const id = endpoint === 'all' ? 'btn-all' : 'btn-' + endpoint;
+  const btn = document.getElementById(id);
+  if (loading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Обработка...';
+  } else {
+    btn.disabled = false;
+    if (endpoint === 'all') {
+      btn.innerHTML = '<span>Сгенерировать все главы</span>';
+    } else {
+      btn.innerHTML = 'Генерировать';
+    }
+  }
+}
+
+async function generate(endpoint) {
+  const fileInput = getFileInput(endpoint);
+  if (!fileInput || !fileInput.files[0]) {
+    setStatus(endpoint, 'error', 'Выберите ZIP или RAR-архив с документами.');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const url = endpoint === 'all' ? '/chapters/all' : '/' + endpoint;
+
+  setBtn(endpoint, true);
+  setStatus(endpoint, 'loading', 'Загружаем архив и запускаем обработку... Это может занять несколько минут.');
+  setProgress(endpoint, true);
+
+  const form = new FormData();
+  form.append('project_parts_zip', file);
+
+  try {
+    const resp = await fetch(BASE + url, { method: 'POST', body: form });
+
+    if (!resp.ok) {
+      let errMsg = `HTTP ${resp.status}`;
+      try {
+        const errData = await resp.json();
+        errMsg = errData.detail || JSON.stringify(errData);
+      } catch(e) {
+        try { errMsg = await resp.text(); } catch(e2) {}
+      }
+      setStatus(endpoint, 'error', 'Ошибка: ' + errMsg);
+      setProgress(endpoint, false);
+      setBtn(endpoint, false);
+      return;
+    }
+
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    let filename = 'result.zip';
+    const match = disposition.match(/filename=([^;]+)/);
+    if (match) filename = match[1].replace(/"/g, '');
+
+    const dlUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = dlUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(dlUrl);
+
+    setStatus(endpoint, 'success',
+      `Готово! Файл <strong>${filename}</strong> скачивается.<br>
+       <small>Откройте DOCX-файлы в Microsoft Word для проверки и редактирования.</small>`
+    );
+    setProgress(endpoint, false);
+    setBtn(endpoint, false);
+
+  } catch(e) {
+    setStatus(endpoint, 'error', 'Ошибка соединения: ' + e.message);
+    setProgress(endpoint, false);
+    setBtn(endpoint, false);
+  }
+}
+</script>
+</body>
+</html>
