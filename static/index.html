@@ -152,6 +152,53 @@
       width: 5%;
     }
 
+    /* ── Лог-блок ────────────────────────────────────────────────────────── */
+    .log-box {
+      margin-top: 10px;
+      background: #0d1b2e;
+      color: #a8c8f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+      border: 1px solid #1e3a5f;
+      line-height: 1.6;
+    }
+    .log-box.active { display: block; }
+    .log-entry { margin-bottom: 2px; white-space: pre-wrap; word-break: break-all; }
+    .log-entry .ts { color: #4a7aaa; margin-right: 6px; }
+    .log-entry.ok  { color: #7dd3a8; }
+    .log-entry.err { color: #f08080; }
+    .log-entry.warn { color: #f0c060; }
+    .log-entry.dim  { color: #5a8ab8; }
+    .log-box-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+    .log-box-title {
+      font-size: 11px;
+      color: var(--gray);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .log-clear-btn {
+      font-size: 11px;
+      color: var(--gray);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .log-clear-btn:hover { color: var(--navy); }
+
     .download-btn {
       display: inline-flex;
       align-items: center;
@@ -301,6 +348,11 @@
         <div class="progress-label"><span id="plabel-all">Обработка...</span><span id="ppct-all">0%</span></div>
         <div class="progress-bar"><div class="fill" id="pfill-all"></div></div>
       </div>
+      <div class="log-box-header" id="logheader-all" style="display:none;">
+        <span class="log-box-title">Подробный лог</span>
+        <button class="log-clear-btn" onclick="clearLog('all')">очистить</button>
+      </div>
+      <div class="log-box" id="log-all"></div>
     </div>
 
     <!-- INDIVIDUAL CHAPTERS -->
@@ -323,6 +375,11 @@
           <div class="progress-label"><span id="plabel-chapter0">Обработка...</span><span id="ppct-chapter0">0%</span></div>
           <div class="progress-bar"><div class="fill" id="pfill-chapter0"></div></div>
         </div>
+        <div class="log-box-header" id="logheader-chapter0" style="display:none;">
+          <span class="log-box-title">Подробный лог</span>
+          <button class="log-clear-btn" onclick="clearLog('chapter0')">очистить</button>
+        </div>
+        <div class="log-box" id="log-chapter0"></div>
       </div>
 
       <div class="chapter-card">
@@ -341,6 +398,11 @@
           <div class="progress-label"><span id="plabel-chapter1">Обработка...</span><span id="ppct-chapter1">0%</span></div>
           <div class="progress-bar"><div class="fill" id="pfill-chapter1"></div></div>
         </div>
+        <div class="log-box-header" id="logheader-chapter1" style="display:none;">
+          <span class="log-box-title">Подробный лог</span>
+          <button class="log-clear-btn" onclick="clearLog('chapter1')">очистить</button>
+        </div>
+        <div class="log-box" id="log-chapter1"></div>
       </div>
 
       <div class="chapter-card">
@@ -359,6 +421,11 @@
           <div class="progress-label"><span id="plabel-chapter2">Обработка...</span><span id="ppct-chapter2">0%</span></div>
           <div class="progress-bar"><div class="fill" id="pfill-chapter2"></div></div>
         </div>
+        <div class="log-box-header" id="logheader-chapter2" style="display:none;">
+          <span class="log-box-title">Подробный лог</span>
+          <button class="log-clear-btn" onclick="clearLog('chapter2')">очистить</button>
+        </div>
+        <div class="log-box" id="log-chapter2"></div>
       </div>
 
       <div class="chapter-card">
@@ -377,6 +444,11 @@
           <div class="progress-label"><span id="plabel-chapter6">Обработка...</span><span id="ppct-chapter6">0%</span></div>
           <div class="progress-bar"><div class="fill" id="pfill-chapter6"></div></div>
         </div>
+        <div class="log-box-header" id="logheader-chapter6" style="display:none;">
+          <span class="log-box-title">Подробный лог</span>
+          <button class="log-clear-btn" onclick="clearLog('chapter6')">очистить</button>
+        </div>
+        <div class="log-box" id="log-chapter6"></div>
       </div>
 
     </div>
@@ -557,8 +629,36 @@ function setBtn(ep, loading) {
   }
 }
 
+// ── Лог-блок ──────────────────────────────────────────────────────────────────
+function logMsg(ep, text, type) {
+  type = type || 'info';
+  const box = document.getElementById('log-' + ep);
+  if (!box) return;
+  // Показываем лог-блок и заголовок при первом сообщении
+  box.classList.add('active');
+  const header = document.getElementById('logheader-' + ep);
+  if (header) header.style.display = 'flex';
+
+  const now = new Date();
+  const ts = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const div = document.createElement('div');
+  div.className = 'log-entry' + (type !== 'info' ? ' ' + type : '');
+  div.innerHTML = '<span class="ts">[' + ts + ']</span>' + text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog(ep) {
+  const box = document.getElementById('log-' + ep);
+  if (box) {
+    box.innerHTML = '';
+    box.classList.remove('active');
+  }
+  const header = document.getElementById('logheader-' + ep);
+  if (header) header.style.display = 'none';
+}
+
 // ── Прогресс-анимация во время polling ───────────────────────────────────────
-// Плавно движется от 5% до 90% за ~5 минут, чтобы показать активность
 function makeProgressAnimator(ep) {
   let pct = 5;
   const steps = [
@@ -581,31 +681,52 @@ function makeProgressAnimator(ep) {
 // ── Polling задачи ────────────────────────────────────────────────────────────
 async function pollTask(ep, taskId) {
   const cancelAnim = makeProgressAnimator(ep);
-  const INTERVAL = 4000;   // опрос каждые 4 сек
+  const INTERVAL = 4000;    // опрос каждые 4 сек
   const MAX_WAIT  = 2700000; // 45 минут максимум
   const started   = Date.now();
+  let pollCount   = 0;
+
+  logMsg(ep, 'Начинаем опрос статуса задачи (каждые 4 сек, макс. 45 мин)...', 'dim');
 
   return new Promise((resolve) => {
     const timer = setInterval(async () => {
       const elapsed = Date.now() - started;
+      pollCount++;
+
       if (elapsed > MAX_WAIT) {
         clearInterval(timer); cancelAnim();
         const mins = Math.round(elapsed / 60000);
+        logMsg(ep, 'Превышено время ожидания (' + mins + ' мин). Задача может ещё выполняться.', 'err');
         setStatus(ep, 'error',
-          `Превышено время ожидания (${mins} мин). Задача может ещё выполняться на сервере.<br>
-           <small>task_id: <code>${taskId}</code></small><br>
-           <button onclick="resumePoll('${ep}','${taskId}')" style="margin-top:6px;padding:4px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:4px;cursor:pointer">Проверить снова</button>`);
+          'Превышено время ожидания (' + mins + ' мин). Задача может ещё выполняться на сервере.<br>' +
+          '<small>task_id: <code>' + taskId + '</code></small><br>' +
+          '<button onclick="resumePoll(\'' + ep + '\',\'' + taskId + '\')" style="margin-top:6px;padding:4px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:4px;cursor:pointer">Проверить снова</button>');
         setProgress(ep, false); setBtn(ep, false);
         resolve(false); return;
       }
+
       try {
         const r = await fetch(BASE + '/task/' + taskId + '/status');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const d = await r.json();
+
+        const elapsedSec = Math.round(elapsed / 1000);
+        const elapsedStr = elapsedSec >= 60
+          ? Math.floor(elapsedSec / 60) + ' мин ' + (elapsedSec % 60) + ' сек'
+          : elapsedSec + ' сек';
+
+        // Логируем каждый poll
+        const statusLabel = { pending: 'ожидание', running: 'выполняется', done: 'готово', error: 'ошибка' }[d.status] || d.status;
+        logMsg(ep,
+          'Опрос #' + pollCount + ' — статус: <strong>' + statusLabel + '</strong> | прошло: ' + elapsedStr,
+          d.status === 'done' ? 'ok' : d.status === 'error' ? 'err' : 'info'
+        );
+
         if (d.status === 'done') {
           clearInterval(timer); cancelAnim();
           setProgress(ep, true, 100, 'Готово!');
-          // Скачиваем файл
+          logMsg(ep, 'Задача завершена! Скачиваем файл...', 'ok');
+
           const dlResp = await fetch(BASE + '/task/' + taskId + '/download');
           if (!dlResp.ok) {
             const err = await dlResp.json().catch(() => ({ detail: 'Ошибка скачивания' }));
@@ -616,19 +737,26 @@ async function pollTask(ep, taskId) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
           URL.revokeObjectURL(url);
+
+          logMsg(ep, 'Файл <strong>' + filename + '</strong> скачан (' + (blob.size / 1048576).toFixed(1) + ' МБ)', 'ok');
           setStatus(ep, 'success',
-            `Готово! Файл <strong>${filename}</strong> скачивается.<br>
-             <small>Откройте DOCX-файлы в Microsoft Word для проверки и редактирования.</small>`);
+            'Готово! Файл <strong>' + filename + '</strong> скачивается.<br>' +
+            '<small>Откройте DOCX-файлы в Microsoft Word для проверки и редактирования.</small>');
           setTimeout(() => setProgress(ep, false), 2000);
           setBtn(ep, false); resolve(true);
+
         } else if (d.status === 'error') {
           clearInterval(timer); cancelAnim();
-          setStatus(ep, 'error', 'Ошибка: ' + (d.error || d.message || 'неизвестная ошибка'));
+          const errText = d.error || d.message || 'неизвестная ошибка';
+          logMsg(ep, 'Ошибка сервера: ' + errText, 'err');
+          setStatus(ep, 'error', 'Ошибка: ' + errText);
           setProgress(ep, false); setBtn(ep, false); resolve(false);
         }
         // pending / running — продолжаем ждать
+
       } catch(e) {
         // Не прерываем polling при единичной сетевой ошибке
+        logMsg(ep, 'Сетевая ошибка при опросе #' + pollCount + ': ' + e.message + ' (продолжаем...)', 'warn');
         console.warn('poll error:', e.message);
       }
     }, INTERVAL);
@@ -640,13 +768,18 @@ async function resumePoll(ep, taskId) {
   setBtn(ep, true);
   setStatus(ep, 'info', 'Подключаемся к задаче...');
   setProgress(ep, true, 60, 'Проверяем статус...');
-  // Сначала проверяем текущий статус
+  logMsg(ep, 'Повторное подключение к задаче ' + taskId + '...', 'warn');
+
   try {
     const r = await fetch(BASE + '/task/' + taskId + '/status');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
+    const statusLabel = { pending: 'ожидание', running: 'выполняется', done: 'готово', error: 'ошибка' }[d.status] || d.status;
+    logMsg(ep, 'Текущий статус задачи: <strong>' + statusLabel + '</strong>', 'info');
+
     if (d.status === 'done') {
       setProgress(ep, true, 100, 'Готово!');
+      logMsg(ep, 'Задача уже завершена! Скачиваем файл...', 'ok');
       const dlResp = await fetch(BASE + '/task/' + taskId + '/download');
       if (!dlResp.ok) throw new Error('Ошибка скачивания');
       const blob = await dlResp.blob();
@@ -654,18 +787,22 @@ async function resumePoll(ep, taskId) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
-      setStatus(ep, 'success', `Готово! Файл <strong>${filename}</strong> скачивается.`);
+      logMsg(ep, 'Файл <strong>' + filename + '</strong> скачан (' + (blob.size / 1048576).toFixed(1) + ' МБ)', 'ok');
+      setStatus(ep, 'success', 'Готово! Файл <strong>' + filename + '</strong> скачивается.');
       setTimeout(() => setProgress(ep, false), 2000);
       setBtn(ep, false);
     } else if (d.status === 'error') {
-      setStatus(ep, 'error', 'Ошибка: ' + (d.error || 'неизвестная'));
+      const errText = d.error || 'неизвестная ошибка';
+      logMsg(ep, 'Задача завершилась с ошибкой: ' + errText, 'err');
+      setStatus(ep, 'error', 'Ошибка: ' + errText);
       setProgress(ep, false); setBtn(ep, false);
     } else {
-      // Ещё выполняется — запускаем polling заново
+      logMsg(ep, 'Задача ещё выполняется, запускаем опрос...', 'info');
       setStatus(ep, 'info', 'Задача ещё выполняется. Ожидайте...');
       await pollTask(ep, taskId);
     }
   } catch(e) {
+    logMsg(ep, 'Ошибка при подключении: ' + e.message, 'err');
     setStatus(ep, 'error', 'Ошибка: ' + e.message + '. task_id: ' + taskId);
     setProgress(ep, false); setBtn(ep, false);
   }
@@ -681,6 +818,11 @@ function generate(ep) {
   const file = fileInput.files[0];
   const url = ep === 'all' ? '/chapters/all' : '/' + ep;
 
+  // Сбрасываем лог и начинаем новый
+  clearLog(ep);
+  logMsg(ep, 'Начало генерации: файл <strong>' + file.name + '</strong> (' + (file.size / 1048576).toFixed(1) + ' МБ)', 'info');
+  logMsg(ep, 'Эндпоинт: POST ' + url, 'dim');
+
   setBtn(ep, true);
   setStatus(ep, 'loading', 'Загружаем архив на сервер...');
   setProgress(ep, true, 1, 'Загружаем архив...');
@@ -689,6 +831,7 @@ function generate(ep) {
   form.append('project_parts_zip', file);
 
   const xhr = new XMLHttpRequest();
+  let lastLoggedPct = 0;
 
   // Реальный прогресс загрузки файла
   xhr.upload.onprogress = function(e) {
@@ -696,38 +839,51 @@ function generate(ep) {
       const pct = Math.round((e.loaded / e.total) * 50); // загрузка = 0..50%
       const mb = (e.loaded / 1048576).toFixed(1);
       const total = (e.total / 1048576).toFixed(1);
-      setProgress(ep, true, pct, `Загружаем архив... ${mb} / ${total} МБ`);
+      setProgress(ep, true, pct, 'Загружаем архив... ' + mb + ' / ' + total + ' МБ');
+
+      // Логируем каждые ~10%
+      const logPct = Math.floor((e.loaded / e.total) * 10) * 10;
+      if (logPct > lastLoggedPct && logPct <= 100) {
+        lastLoggedPct = logPct;
+        logMsg(ep, 'Загрузка: ' + mb + ' МБ / ' + total + ' МБ (' + logPct + '%)', 'dim');
+      }
     }
   };
 
   xhr.upload.onload = function() {
     setProgress(ep, true, 52, 'Архив получен, запускаем генерацию...');
     setStatus(ep, 'loading', 'Архив загружен. Запускаем генерацию...');
+    logMsg(ep, 'Архив полностью загружен на сервер. Ожидаем task_id...', 'info');
   };
 
   xhr.onload = function() {
     if (xhr.status < 200 || xhr.status >= 300) {
       let errMsg = 'HTTP ' + xhr.status;
-      try { const d = JSON.parse(xhr.responseText); errMsg = d.detail || JSON.stringify(d); } catch(e) {}
+      try { const d = JSON.parse(xhr.responseText); errMsg = d.detail || JSON.stringify(d); } catch(e2) {}
+      logMsg(ep, 'Ошибка HTTP ' + xhr.status + ': ' + errMsg, 'err');
       setStatus(ep, 'error', 'Ошибка: ' + errMsg);
       setProgress(ep, false); setBtn(ep, false); return;
     }
     let task_id;
-    try { task_id = JSON.parse(xhr.responseText).task_id; } catch(e) {
+    try { task_id = JSON.parse(xhr.responseText).task_id; } catch(e2) {
+      logMsg(ep, 'Не удалось разобрать ответ сервера: ' + xhr.responseText.slice(0, 200), 'err');
       setStatus(ep, 'error', 'Ошибка разбора ответа сервера');
       setProgress(ep, false); setBtn(ep, false); return;
     }
+    logMsg(ep, 'Получен task_id: <strong>' + task_id + '</strong>', 'ok');
     setStatus(ep, 'info', 'Задача запущена. Генерация займёт несколько минут — страницу закрывать не нужно.');
     setProgress(ep, true, 55, 'Запускаем обработку...');
     pollTask(ep, task_id);
   };
 
   xhr.onerror = function() {
+    logMsg(ep, 'Ошибка соединения с сервером', 'err');
     setStatus(ep, 'error', 'Ошибка соединения. Проверьте подключение к интернету.');
     setProgress(ep, false); setBtn(ep, false);
   };
 
   xhr.ontimeout = function() {
+    logMsg(ep, 'Превышено время загрузки файла (10 мин)', 'err');
     setStatus(ep, 'error', 'Превышено время загрузки файла. Попробуйте снова.');
     setProgress(ep, false); setBtn(ep, false);
   };
