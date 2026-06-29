@@ -105,21 +105,83 @@ class QdrantService:
             for pair in project_part.chunk_pairs
         ]
 
+    # Прямые текстовые метки дисциплины, встречающиеся в суффиксе имени файла
+    # после "_" (напр. "..._АР.pdf", "..._ПЗУ.pdf"). Имеют наивысший приоритет,
+    # т.к. явно указывают раздел независимо от формата префикса.
+    _SUFFIX_LABEL_TO_NUMBER = {
+        "ПЗ": "1",
+        "ПЗУ": "2",
+        "АР": "3",
+        "КР": "4",
+        "ПOC": "7",  # на случай латинской O
+        "ПОС": "7",
+        "ООС": "8",
+        "ТМ": "6.1",
+        "ТП": "6.2",
+        "ИГИ": "ИГИ",
+        "ИЭИ": "ИЭИ",
+    }
+
+    @classmethod
+    def _resolve_part_number(cls, stem: str) -> str:
+        """Извлекает номер раздела ПД из имени файла любого формата.
+
+        Поддерживает:
+          * старый формат: "1_ПЗ", "5.1_..." (число/число.число до "_");
+          * реальные имена из экспертизы:
+              "Раздел ПД №3_АР" -> 3 -> АР
+              "Раздел ПД №5-подраздел ПД №1-книга №1_ИОС1.1" -> 5.1
+          * по явной текстовой метке-суффиксу после "_": "_АР", "_ПЗУ", "_ПОС".
+        Возвращает строковый ключ для DISCIPLINE_BY_NUMBER.
+        """
+        import re as _re
+
+        # Суффикс дисциплины после последнего "_"
+        suffix = stem.split("_")[-1].strip() if "_" in stem else ""
+
+        # 1) ИОС<подраздел>.<книга> -> раздел 5, подраздел = первая цифра -> "5.N"
+        m_ios = _re.match(r"^ИОС\s*(\d+)", suffix, _re.IGNORECASE)
+        if m_ios:
+            return f"5.{m_ios.group(1)}"
+
+        # 2) Явная текстовая метка-суффикс (АР/КР/ПЗ/ПЗУ/ПОС/ТМ/ТП/ИГИ/ИЭИ)
+        suffix_norm = suffix.upper().replace(" ", "")
+        for label, number in cls._SUFFIX_LABEL_TO_NUMBER.items():
+            if suffix_norm == label.upper():
+                return number
+
+        # 3) Номер из префикса "Раздел ПД №N" / "подраздел ПД №M"
+        #    Если есть и раздел №5, и подраздел №M -> "5.M"
+        head = stem.split("_")[0]
+        m_razdel = _re.search(r"Раздел\s*ПД\s*№\s*(\d+)", head, _re.IGNORECASE)
+        m_podrazdel = _re.search(r"подраздел\s*ПД\s*№\s*(\d+)", head, _re.IGNORECASE)
+        if m_razdel:
+            razdel = m_razdel.group(1)
+            if razdel == "5" and m_podrazdel:
+                return f"5.{m_podrazdel.group(1)}"
+            return razdel
+
+        # 4) Старый формат: число или число.число до "_"
+        part_ = head
+        parts_split_by_point = part_.split(".")
+        if len(parts_split_by_point) == 1:
+            return parts_split_by_point[0]
+        return parts_split_by_point[0] + "." + parts_split_by_point[1]
+
     def _build_part_payload(self, file_path: Path) -> dict:
         """Вспомогательная функция для генерации ключей part_number, part_name"""
         stem = file_path.stem
-        part_ = stem.split("_")[0]
-        parts_split_by_point = part_.split(".")
-        if len(parts_split_by_point) == 1:
-            part_number = parts_split_by_point[0]
-        else:
-            part_number = parts_split_by_point[0] + "." + parts_split_by_point[1]
-
+        part_number = self._resolve_part_number(stem)
+        part_name = self.DISCIPLINE_BY_NUMBER.get(
+            part_number, self.DISCIPLINE_BY_NUMBER["прочее"]
+        )
+        logger.debug(
+            f"[part_payload] file=<{stem}> -> part_number=<{part_number}> "
+            f"part_name=<{part_name}>"
+        )
         return {
             "part_number": part_number,
-            "part_name": self.DISCIPLINE_BY_NUMBER.get(
-                part_number, self.DISCIPLINE_BY_NUMBER["прочее"]
-            ),
+            "part_name": part_name,
         }
 
     def calculate_points(self, project_part: "ProjectPart") -> list[PointStruct]:

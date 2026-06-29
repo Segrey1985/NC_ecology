@@ -51,12 +51,94 @@ def _is_safe_member_path(name: str) -> bool:
     return True
 
 
+def _rar_bytes_to_zip_via_bsdtar(data: bytes, filename: str) -> bytes:
+    """Распаковывает RAR через bsdtar (libarchive) во временный каталог
+    и упаковывает содержимое в ZIP.
+
+    Надёжнее потокового rarfile.open().read(): libarchive корректно
+    читает RAR5 и не обрывает большие записи. Бросает RuntimeError
+    при любой проблеме, чтобы вызывающий код мог сделать фолбэк.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+    import os
+
+    bsdtar = shutil.which("bsdtar")
+    if not bsdtar:
+        raise RuntimeError("bsdtar не найден")
+
+    with tempfile.TemporaryDirectory(prefix="rar2zip_") as tmp:
+        tmp_dir = Path(tmp)
+        rar_path = tmp_dir / "input.rar"
+        out_dir = tmp_dir / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        rar_path.write_bytes(data)
+
+        proc = subprocess.run(
+            [bsdtar, "-x", "-f", str(rar_path), "-C", str(out_dir)],
+            capture_output=True,
+            timeout=600,
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.decode("utf-8", "replace")[:500]
+            raise RuntimeError(f"bsdtar ошибка (code={proc.returncode}): {err}")
+
+        # Собираем все файлы в ZIP
+        collected = [p for p in out_dir.rglob("*") if p.is_file()]
+        if not collected:
+            raise RuntimeError("bsdtar: после распаковки нет файлов")
+        if len(collected) > MAX_FILES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{filename}: слишком много файлов в архиве (>{MAX_FILES})",
+            )
+
+        total_uncompressed = 0
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for p in collected:
+                rel = p.relative_to(out_dir).as_posix()
+                if not _is_safe_member_path(rel):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{filename}: небезопасный путь внутри RAR: {rel}",
+                    )
+                total_uncompressed += p.stat().st_size
+                if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"{filename}: слишком большой распакованный размер "
+                            f"(>{MAX_UNCOMPRESSED_BYTES} байт)"
+                        ),
+                    )
+                zf.write(p, rel)
+
+        zip_buf.seek(0)
+        logger.info(
+            f"{filename}: RAR сконвертирован в ZIP через bsdtar "
+            f"({len(collected)} файлов, {total_uncompressed} байт)"
+        )
+        return zip_buf.getvalue()
+
+
 def rar_bytes_to_zip_bytes(data: bytes, filename: str = "archive.rar") -> bytes:
     """Конвертирует RAR-архив (байты) в ZIP-архив (байты).
 
-    Позволяет остальному пайплайну работать только с ZIP, не зная о RAR.
-    Использует библиотеку rarfile (под капотом — системная утилита unrar).
+    Порядок: сначала надёжный bsdtar (libarchive), при его отсутствии/сбое —
+    фолбэк на rarfile. bsdtar предпочтителен, т.к. потоковое чтение
+    rarfile.open().read() иногда обрывает большие RAR5-записи.
     """
+    # 1) Основной путь — bsdtar
+    try:
+        return _rar_bytes_to_zip_via_bsdtar(data, filename)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"{filename}: bsdtar недоступен/сбой ({e}); фолбэк на rarfile")
+
+    # 2) Фолбэк — rarfile
     if not _RARFILE_AVAILABLE:
         raise HTTPException(
             status_code=400,

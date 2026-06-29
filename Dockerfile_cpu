@@ -13,7 +13,7 @@ WORKDIR /app
 # 0. Системные зависимости (unar нужен для поддержки RAR-архивов;
 #    unar свободен и доступен в основном репозитории Debian, в отличие от unrar)
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends unar \
+  && apt-get install -y --no-install-recommends unar libarchive-tools \
   && rm -rf /var/lib/apt/lists/*
 
 # 1. Копируем бинарный файл uv из официального образа

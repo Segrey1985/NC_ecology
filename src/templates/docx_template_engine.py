@@ -29,6 +29,13 @@ from src.utils.logger import logger
 MARK_FILLED = "\u241f"   # ␟  — обрамляет заполненные значения
 MARK_MISSING = "\u241e"  # ␞  — обрамляет незаполненные значения
 
+# Текст-заглушка для незаполненных полей в финальном (чистом) документе.
+MISSING_PLACEHOLDER_TEXT = "Сведения отсутствуют."
+
+import re as _re_mod
+# Шаблон текста незаполненного плейсхолдера: {{undefined ...}} или {{ ... }}
+_UNDEFINED_RE = _re_mod.compile(r"\{\{\s*(?:undefined\s+)?[^}]*\}\}")
+
 FILLED_COLOR = WD_COLOR_INDEX.GRAY_25   # светло-серая подсветка заполненных значений
 MISSING_COLOR = WD_COLOR_INDEX.YELLOW   # жёлтая подсветка незаполненных
 
@@ -149,13 +156,34 @@ def prepare_context(
 # ----------------------------------------------------------------------------
 # Пост-обработка: подсветка по маркерам
 # ----------------------------------------------------------------------------
-def _highlight_paragraph(paragraph) -> None:
+def _strip_highlight_all_runs(paragraph) -> None:
+    """Снимает любую заливку (highlight) со всех run-ов абзаца.
+
+    Нужно, чтобы убрать зелёную подсветку плейсхолдеров, унаследованную из
+    шаблона template.docx. Подсветку итогового документа полностью контролирует
+    движок (серый = заполнено, жёлтый = не заполнено), а не шаблон.
+    """
+    for run in paragraph.runs:
+        try:
+            if run.font.highlight_color is not None:
+                run.font.highlight_color = None
+        except Exception:
+            pass
+
+
+def _highlight_paragraph(paragraph, *, clean_final: bool = False) -> None:
     """Подсвечивает текст между маркерами внутри одного абзаца.
 
     docxtpl, как правило, помещает значение плейсхолдера в один run, но во
     избежание потери маркеров при их разбиении по нескольким run-ам сначала
     выполняется "слияние" текста абзаца в первый run.
+
+    :param clean_final: если True — итоговый чистый документ: маркеры удаляются,
+        подсветка НЕ накладывается (ни серая, ни жёлтая).
     """
+    # В любом случае сначала снимаем зелёную/любую подсветку из шаблона
+    _strip_highlight_all_runs(paragraph)
+
     full_text = "".join(run.text for run in paragraph.runs)
     if MARK_FILLED not in full_text and MARK_MISSING not in full_text:
         return
@@ -177,6 +205,12 @@ def _highlight_paragraph(paragraph) -> None:
     for text, color in segments:
         if text == "":
             continue
+        # В финальном чистом документе незаполненный плейсхолдер
+        # ({{undefined ...}} / {{ ... }}) заменяем на заглушку.
+        if clean_final and color is MISSING_COLOR:
+            text = _UNDEFINED_RE.sub(MISSING_PLACEHOLDER_TEXT, text)
+            if not text.strip():
+                text = MISSING_PLACEHOLDER_TEXT
         new_run = paragraph.add_run(text)
         # копируем базовые свойства шрифта
         try:
@@ -189,7 +223,9 @@ def _highlight_paragraph(paragraph) -> None:
                 new_run.font.name = font.name
         except Exception:
             pass
-        if color is not None:
+        # Явно сбрасываем любую заливку, затем применяем нужную
+        new_run.font.highlight_color = None
+        if not clean_final and color is not None:
             new_run.font.highlight_color = color
 
 
@@ -244,12 +280,43 @@ def _iter_all_paragraphs(doc: Document):
             yield from _tables(hf.tables)
 
 
-def apply_highlighting(docx_path: Path) -> None:
-    """Открывает готовый DOCX и подсвечивает все маркированные значения."""
+def apply_highlighting(docx_path: Path, *, clean_final: bool = False) -> None:
+    """Открывает готовый DOCX и подсвечивает все маркированные значения.
+
+    :param clean_final: если True — убирает всю подсветку (и зелёную из шаблона,
+        и серую/жёлтую), оставляя чистый текст для финального ООС.
+    """
     doc = Document(str(docx_path))
     for paragraph in _iter_all_paragraphs(doc):
-        _highlight_paragraph(paragraph)
+        _highlight_paragraph(paragraph, clean_final=clean_final)
+    if clean_final:
+        # Финальный проход: заменяем ЛЮБОЙ оставшийся плейсхолдер {{...}}
+        # на заглушку. Покрывает случаи, когда docxtpl оставил пустое
+        # значение ({{ name.field }}) либо вовсе не тронул плейсхолдер.
+        for paragraph in _iter_all_paragraphs(doc):
+            _replace_leftover_placeholders(paragraph)
     doc.save(str(docx_path))
+
+
+def _replace_leftover_placeholders(paragraph) -> None:
+    """Заменяет любые оставшиеся {{...}} в абзаце на текст-заглушку.
+
+    Работает по runs, чтобы сохранить форматирование. Если плейсхолдер
+    разбит на несколько runs, текст склеивается в первый run, остальные
+    очищаются.
+    """
+    full = "".join(r.text for r in paragraph.runs)
+    if "{{" not in full:
+        return
+    new_full = _UNDEFINED_RE.sub(MISSING_PLACEHOLDER_TEXT, full)
+    if new_full == full:
+        return
+    if paragraph.runs:
+        paragraph.runs[0].text = new_full
+        for r in paragraph.runs[1:]:
+            r.text = ""
+    else:
+        paragraph.text = new_full
 
 
 # ----------------------------------------------------------------------------
@@ -262,6 +329,7 @@ def fill_docx_template(
     *,
     highlight: bool = True,
     add_dates: bool = True,
+    clean_final: bool = False,
 ) -> list[str]:
     """Заполнение шаблона docx из json/dict и сохранение копии.
 
@@ -280,7 +348,11 @@ def fill_docx_template(
         except FileNotFoundError:
             raise FileNotFoundError(f"Путь к json файлу не найден: {data}")
 
-    context = prepare_context(data, highlight=highlight, add_dates=add_dates)
+    # clean_final: итоговый чистый документ без подсветки.
+    # Маркеры всё равно вставляем (чтобы отличить текст плейсхолдеров),
+    # но на этапе пост-обработки подсветка не накладывается.
+    use_markers = highlight or clean_final
+    context = prepare_context(data, highlight=use_markers, add_dates=add_dates)
 
     PlaceholderUndefined._registry = set()
     try:
@@ -291,9 +363,9 @@ def fill_docx_template(
     finally:
         PlaceholderUndefined._registry = None
 
-    if highlight:
+    if highlight or clean_final:
         try:
-            apply_highlighting(Path(output_docx_path))
+            apply_highlighting(Path(output_docx_path), clean_final=clean_final)
         except Exception:
             logger.exception(
                 f"Не удалось применить подсветку для {output_docx_path}"

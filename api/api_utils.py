@@ -135,6 +135,115 @@ async def resolve_table_placeholders_path(
     return out_path
 
 
+def _find_chapter_docx(chapter_dir: Path) -> Path | None:
+    """Находит выходной .docx в папке главы (любое имя)."""
+    if not chapter_dir.exists():
+        return None
+    docx_files = sorted(chapter_dir.rglob("*.docx"))
+    # исключаем временные/служебные файлы
+    docx_files = [p for p in docx_files if not p.name.startswith("~$")]
+    return docx_files[0] if docx_files else None
+
+
+def _render_clean_chapter(
+    *,
+    output_json: Path | None,
+    template_path: Path,
+    out_docx: Path,
+) -> Path | None:
+    """Рендерит чистую (clean_final) копию главы из JSON+шаблон.
+
+    Без подсветки, незаполненные → «Сведения отсутствуют.».
+    Если JSON или шаблон недоступны — возвращает None.
+    """
+    from src.templates.docx_template_engine import fill_docx_template
+    if not output_json or not Path(output_json).exists():
+        return None
+    if not template_path or not Path(template_path).exists():
+        return None
+    try:
+        with open(output_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        fill_docx_template(
+            template_path=Path(template_path),
+            data=data,
+            output_docx_path=out_docx,
+            highlight=False,
+            clean_final=True,
+        )
+        return out_docx
+    except Exception:
+        logger.exception(f"[combine] Не удалось рендерить clean-копию {out_docx}")
+        return None
+
+
+def _find_output_json(chapter_dir: Path) -> Path | None:
+    if not chapter_dir.exists():
+        return None
+    for pat in ("*_output.json", "placeholders.json"):
+        found = sorted(chapter_dir.rglob(pat))
+        if found:
+            return found[0]
+    return None
+
+
+def _assemble_combined_report(
+    *,
+    output_dir: Path,
+    ch0_out: Path,
+    ch1_out: Path,
+    ch2_out: Path,
+    ch6_out: Path,
+    base_placeholders: dict,
+    template_paths: dict | None = None,
+) -> None:
+    """Собирает титульный лист и объединённый Сводный_отчёт_ООС.docx.
+
+    Помещает в output_dir:
+      - title.docx                 — титульный лист;
+      - Сводный_отчёт_ООС.docx   — Титул + Аннотация + Главы 1/2/6 (чистые).
+
+    Стратегия: для сводного отчёта главы перерендериваются в clean_final из
+    их *_output.json + шаблон (без подсветки, с заглушками). Если шаблоны
+    недоступны — фолбэк на уже готовые (технические) docx.
+    """
+    from src.templates.combine_chapters import build_combined_report, TITLE_TEMPLATE_PATH
+
+    template_paths = template_paths or {}
+    clean_dir = output_dir / "_clean"
+    clean_dir.mkdir(parents=True, exist_ok=True)
+
+    def _resolve(ch_out: Path, key: str, fallback_name: str) -> Path | None:
+        # 1) пытаемся clean_final из JSON+шаблон
+        tpl = template_paths.get(key)
+        json_path = _find_output_json(ch_out)
+        clean = _render_clean_chapter(
+            output_json=json_path,
+            template_path=tpl,
+            out_docx=clean_dir / fallback_name,
+        ) if tpl else None
+        if clean is not None:
+            return clean
+        # 2) фолбэк на готовый docx
+        return _find_chapter_docx(ch_out)
+
+    ch0_docx = _resolve(ch0_out, "chapter0", "chapter0_clean.docx")
+    ch1_docx = _resolve(ch1_out, "chapter1", "chapter1_clean.docx")
+    ch2_docx = _resolve(ch2_out, "chapter2", "chapter2_clean.docx")
+    ch6_docx = _resolve(ch6_out, "chapter6", "chapter6_clean.docx")
+
+    title_path, combined_path = build_combined_report(
+        title_template_path=TITLE_TEMPLATE_PATH,
+        base_placeholders=base_placeholders,
+        chapter0_docx=ch0_docx,
+        chapter1_docx=ch1_docx,
+        chapter2_docx=ch2_docx,
+        chapter6_docx=ch6_docx,
+        output_dir=output_dir,
+    )
+    logger.info(f"[combine] Готово: {title_path.name}, {combined_path.name}")
+
+
 def zip_output_dir(output_dir: Path, result_filename: str) -> StreamingResponse:
     zip_buf = io.BytesIO()
     
@@ -553,6 +662,26 @@ async def generate_all_chapters(
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             
             logger.info("\nГЛАВЫ 1, 2 И 6 СФОРМИРОВАНЫ\n")
+            
+            # --- Титульный лист + объединённый Сводный_отчёт_ООС.docx ---
+            try:
+                await asyncio.to_thread(
+                    _assemble_combined_report,
+                    output_dir=output_dir,
+                    ch0_out=ch0_out,
+                    ch1_out=ch1_out,
+                    ch2_out=ch2_out,
+                    ch6_out=ch6_out,
+                    base_placeholders=base_placeholders,
+                    template_paths={
+                        "chapter0": template_ch0_path,
+                        "chapter1": template_ch1_path,
+                        "chapter2": template_ch2_path,
+                        "chapter6": template_ch6_path,
+                    },
+                )
+            except Exception:
+                logger.exception("Не удалось собрать объединённый отчёт (главы выдаются по отдельности)")
             
             return zip_output_dir(output_dir, "all_chapters.zip")
     
