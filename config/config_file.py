@@ -49,13 +49,14 @@ rerankers_list = {
 class Config(BaseSettings):
     HF_TOKEN: SecretStr
     AI_TUNNEL_API_KEY: SecretStr
+    ANTHROPIC_API_KEY: SecretStr = SecretStr("")
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
     
-    MODEL_NAME: str = models["gpt54mini"]
+    MODEL_NAME: str = models["claude"]
     TEMPERATURE: float | None = None
     BASE_DIR: Path = BASE_DIR
     EMBEDDINGS_MODEL_NAME: str = "text-embedding-3-large"
