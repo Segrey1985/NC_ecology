@@ -7,8 +7,8 @@ from .inner import *
 class LandPlot(BaseModel):
     """Сведения о земельном участке"""
 
-    cadastral_number: str = Field(
-        ...,
+    cadastral_number: Optional[str] = Field(
+        None,
         description="Кадастровый номер земельного участка",
         pattern=r"^\d{2}:\d{2}:\d{7}:\d+$",
     )
@@ -20,8 +20,8 @@ class LandPlot(BaseModel):
         "не определено",
         description="Вид разрешенного использования (например: предоставление коммунальных услуг, коммунальное обслуживание).",
     )
-    area_sqm: float = Field(
-        ...,
+    area_sqm: Optional[float] = Field(
+        None,
         description="Площадь земельного участка в кв.м",
     )
     territorial_zone: Optional[str] = Field(
@@ -69,8 +69,8 @@ class SanitaryZone(BaseModel):
 class Surroundings(BaseModel):
     """Земельный участок ограничен ... (перечень объектов окружения кадастровые номера, расстояния, назначение)"""
 
-    directions: list[SurroundingDirection] = Field(
-        ...,
+    directions: Optional[list[SurroundingDirection]] = Field(
+        None,
         description="Описание окружения по 8 румбам",
     )
     _part_name: str = PrivateAttr(default=['ПЗУ', 'ПЗ'])
@@ -107,8 +107,8 @@ class NearestObjects(BaseModel):
 class Architecture(BaseModel):
     """Архитектурно-планировочные решения"""
 
-    building_type: BuildingType = Field(
-        ...,
+    building_type: Optional[BuildingType] = Field(
+        None,
         description="Тип здания котельной (modular — БМК, stationary — стационарное)",
     )
     floors: Optional[str] = Field(
@@ -127,8 +127,8 @@ class Architecture(BaseModel):
         None,
         description="Обозначение осей здания (например: А-Б/1-4).",
     )
-    dimensions: str = Field(
-        ...,
+    dimensions: Optional[str] = Field(
+        None,
         description="Габаритные размеры здания в осях (например: 7,8 x 2,35).",
     )
     building_height_m: Optional[float] = Field(
@@ -163,16 +163,16 @@ class Constructive(BaseModel):
 class GasFlue(BaseModel):
     """Газоотводящие (дымовые) трубы"""
     
-    stack_count: int = Field(
-        ...,
+    stack_count: Optional[int] = Field(
+        None,
         description="Количество газоотводящих стволов (дымовых труб)",
     )
-    stack_diameter_mm: int = Field(
-        ...,
+    stack_diameter_mm: Optional[int] = Field(
+        None,
         description="Диаметр газоотводящих стволов (дымовых труб), мм (Ду)",
     )
-    stack_height_m: float = Field(
-        ...,
+    stack_height_m: Optional[float] = Field(
+        None,
         description="Высота верха газоотводящих стволов (дымовых труб), м",
     )
     _part_name: str = PrivateAttr(default=['АР', 'КР'])
@@ -182,20 +182,20 @@ class GasFlue(BaseModel):
 class HeatSupply(BaseModel):
     """Параметры системы теплоснабжения"""
 
-    operation_mode: str = Field(
-        ...,
+    operation_mode: Optional[str] = Field(
+        None,
         description="Режим работы (например: круглосуточно, отопительный период).",
     )
-    system_type: str = Field(
-        ...,
+    system_type: Optional[str] = Field(
+        None,
         description="Тип системы теплоснабжения (например: 2-х трубная, закрытая).",
     )
-    heat_carrier: str = Field(
-        ...,
+    heat_carrier: Optional[str] = Field(
+        None,
         description="Теплоноситель (например: вода).",
     )
-    temperature_schedule: str = Field(
-        ...,
+    temperature_schedule: Optional[str] = Field(
+        None,
         description="Температурный график (например: 95/70 °С, 105/80 °С).",
     )
     _part_name: str = PrivateAttr(default=['ТМ', 'ПЗ'])
@@ -213,7 +213,7 @@ class Boilers(BaseModel):
 class Pumps(BaseModel):
     """Перечень вспомогательного оборудования (насосы) без дублирования"""
 
-    pumps: list[Pump] = Field(
+    pumps: Optional[list[Pump]] = Field(
         description="Вспомогательное оборудование 1 и 2 очереди строительства. Насос ...",
         default_factory=list,
     )
@@ -223,8 +223,8 @@ class Pumps(BaseModel):
 class Fuel(BaseModel):
     """Сведения об основном топливе"""
 
-    primary_fuel: str = Field(
-        ...,
+    primary_fuel: Optional[str] = Field(
+        None,
         description="Вид основного топлива (например: природный газ).",
     )
     calorific_value: Optional[float] = Field(
@@ -235,8 +235,8 @@ class Fuel(BaseModel):
         None,
         description="Плотность топлива, кг/м³",
     )
-    annual_consumption: float = Field(
-        ...,
+    annual_consumption: Optional[float] = Field(
+        None,
         description="Годовой расход топлива, тыс. м³",
     )
     total_max: Optional[float] = Field(
@@ -251,8 +251,8 @@ class Fuel(BaseModel):
         None,
         description="Суммарный расход при мин. производительности, м³/ч",
     )
-    consumption_table: list[FuelConsumptionRow] = Field(
-        ...,
+    consumption_table: Optional[list[FuelConsumptionRow]] = Field(
+        None,
         description="Таблица расходов топлива по потребителям",
     )
     _part_name: str = PrivateAttr(default=['ТП'])
@@ -275,8 +275,8 @@ class EmergencyFuel(BaseModel):
 class PowerSupply(BaseModel):
     """Сведения об электроснабжении"""
 
-    source: str = Field(
-        ...,
+    source: Optional[str] = Field(
+        None,
         description="Источник электроснабжения",
     )
     reliability_category: Optional[ReliabilityCategory] = Field(
@@ -310,8 +310,8 @@ class PowerSupply(BaseModel):
 class WaterTreatment(BaseModel):
     """Химводоочистка"""
 
-    equipment: list[str] = Field(
-        ...,
+    equipment: Optional[list[str]] = Field(
+        None,
         description="Перечень блоков системы водоподготовки. ... рекомендуем установить систему водоподготовки, состоящую из следующих блоков...",
     )
     _part_name: str = PrivateAttr(default=['ТМ', 'ПЗ'])
