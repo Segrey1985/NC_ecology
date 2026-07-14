@@ -6,7 +6,7 @@ services:
     image: ecology-app-cpu
     environment:
       DEVICE: cpu
-      MODEL_NAME: claude-sonnet-4-6
+      MODEL_NAME: claude-sonnet-4.6
     gpus: !reset null
 # docker compose up --build
 # override подхватывается автоматически; GPU не требуется
