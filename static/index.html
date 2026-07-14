@@ -883,12 +883,12 @@ function generate(ep) {
   };
 
   xhr.ontimeout = function() {
-    logMsg(ep, 'Превышено время загрузки файла (10 мин)', 'err');
+    logMsg(ep, 'Превышено время загрузки файла (30 мин)', 'err');
     setStatus(ep, 'error', 'Превышено время загрузки файла. Попробуйте снова.');
     setProgress(ep, false); setBtn(ep, false);
   };
 
-  xhr.timeout = 600000; // 10 минут на загрузку файла
+  xhr.timeout = 1800000; // 30 минут на загрузку файла 
   xhr.open('POST', BASE + url);
   xhr.send(form);
 }
