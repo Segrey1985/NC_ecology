@@ -6,7 +6,8 @@ services:
     image: ecology-app-cpu
     environment:
       DEVICE: cpu
+      MODEL_NAME: claude-sonnet-4-6
     gpus: !reset null
-
 # docker compose up --build
 # override подхватывается автоматически; GPU не требуется
+# ANTHROPIC_API_KEY передаётся через .env (не коммитится)
