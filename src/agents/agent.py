@@ -165,8 +165,6 @@ class RetrievalPrompts(BaseModel):
 
     rag_prompts: list[RagPrompt] = Field(
         ...,
-        min_length=N_PROMPTS,
-        max_length=N_PROMPTS,
         description=(
             f"Ровно {N_PROMPTS} разных семантических запроса для dense-поиска в Qdrant. "
             "Каждый — отдельный угол: синонимы, аббревиатуры, формулировки из ПД/СП. "
@@ -176,8 +174,6 @@ class RetrievalPrompts(BaseModel):
 
     reranker_prompts: list[RerankPrompt] = Field(
         ...,
-        min_length=N_PROMPTS,
-        max_length=N_PROMPTS,
         description=(
             f"Ровно {N_PROMPTS} разных коротких запроса для cross-encoder reranker. "
             "Каждый описывает отдельный аспект целевой информации во фрагменте; "
