@@ -18,7 +18,7 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 models = {
     # clade
-    "claude": "claude-sonnet-4.6",
+    "claude": "claude-sonnet-4-6",
     
     # gemini
     "gemini3.1pro": "gemini-3.1-pro-preview",
