@@ -36,7 +36,7 @@ class Geology(BaseModel):
         description="Перечень инженерно-геологических элементов (ИГЭ). Должен отражать все перечисленные ИГЭ в разделах 'description', 'num_layers'",
         json_schema_extra={"vanish": True},
     )
-    num_layers_: str = Field(..., description="Количество инженерно-геологических элементов (ИГЭ)")
+    num_layers_: Optional[str] = Field(None, description="Количество инженерно-геологических элементов (ИГЭ)")
     _use_parent: bool = PrivateAttr(default=True)
     _part_name: str = PrivateAttr(default=["ИГИ"])
 
