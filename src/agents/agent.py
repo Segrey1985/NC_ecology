@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from operator import add
 from dataclasses import dataclass
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional, TypedDict, Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -162,6 +162,20 @@ class RerankPrompt(BaseModel):
 
 class RetrievalPrompts(BaseModel):
     """Промпты для retrieval-этапа: dense retrieval и cross-encoder reranking."""
+
+    @field_validator("rag_prompts", mode="before")
+    @classmethod
+    def coerce_rag_prompts(cls, v):
+        if isinstance(v, list):
+            return [{"rag_prompt": item} if isinstance(item, str) else item for item in v]
+        return v
+
+    @field_validator("reranker_prompts", mode="before")
+    @classmethod
+    def coerce_reranker_prompts(cls, v):
+        if isinstance(v, list):
+            return [{"reranker_prompt": item} if isinstance(item, str) else item for item in v]
+        return v
 
     rag_prompts: list[RagPrompt] = Field(
         ...,
