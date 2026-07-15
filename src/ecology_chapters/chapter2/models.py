@@ -22,8 +22,8 @@ from .inner import (
 class Geology(BaseModel):
     """2.1.1. Инженерно-геологические условия района расположения объекта проектирования"""
 
-    description: str = Field(
-        ...,
+    description: Optional[str] = Field(
+        None,
         description=(
             "Полное описание инженерно-геологических условий площадки: "
             "глубина бурения, типы отложений, характеристики грунтов. "
@@ -44,8 +44,8 @@ class Geology(BaseModel):
 class Hydrogeology(BaseModel):
     """2.1.2. Гидрогеологические условия района расположения объекта проектирования"""
 
-    description: str = Field(
-        ...,
+    description: Optional[str] = Field(
+        None,
         description=(
             "Описание гидрогеологических условий: наличие подземных вод, глубина залегания, "
             "абсолютные отметки, тип питания, прогноз подъёма уровня. "
@@ -110,8 +110,8 @@ class Soil(BaseModel):
         ),
         json_schema_extra={"vanish": True},
     )
-    chemical_results: str = Field(
-        ...,
+    chemical_results: Optional[str] = Field(
+        None,
         description=(
             "Результаты химического анализа почв: суммарный показатель загрязнения Zc, "
             "категория загрязнения, превышения ПДК. "
@@ -135,36 +135,36 @@ class Soil(BaseModel):
         ),
         json_schema_extra={"vanish": True},
     )
-    microbiology_results: str = Field(
-        ...,
+    microbiology_results: Optional[str] = Field(
+        None,
         description=(
             "Результаты микробиологических и паразитологических исследований. "
             "Пример: 'По санитарно-бактериологическим и паразитологическим показателям "
             "почвы относятся к категории «Чистая».'"
         ),
     )
-    toxicology_results: str = Field(
-        ...,
+    toxicology_results: Optional[str] = Field(
+        None,
         description=(
             "Результаты токсикологических исследований и класс опасности. "
             "Пример: 'По результатам биотестирования почвогрунт относится к V классу опасности – "
             "практически неопасный.'"
         ),
     )
-    radiation_results: str = Field(
-        ...,
+    radiation_results: Optional[str] = Field(
+        None,
         description=(
             "Результаты радиационного обследования. "
             "Пример: 'Мощность амбиентной дозы гамма-излучения на территории ниже "
             "утвержденного норматива (не более 0,30 мкЗв/ч). Радиационных аномалий не обнаружено.'"
         ),
     )
-    depth_recommendations: list[SoilDepthRecommendation] = Field(
-        ...,
+    depth_recommendations: Optional[list[SoilDepthRecommendation]] = Field(
+        None,
         description="Рекомендации по использованию почв по глубинам",
     )
-    cipher: str = Field(
-        ...,
+    cipher: Optional[str] = Field(
+        None,
         description="Шифр тома проектной документации. Например: '123-2026-ИЭИ' или '05/24-ИЭИ'"
     )
     _part_name: str = PrivateAttr(default=["ИЭИ"])
@@ -173,15 +173,15 @@ class Soil(BaseModel):
 class LandUse(BaseModel):
     """2.1.5. Характер землепользования района проектирования"""
 
-    site_condition: str = Field(
-        ...,
+    site_condition: Optional[str] = Field(
+        None,
         description=(
             "Описание текущего состояния участка. "
             "Пример: 'На участке проектирования объекты капитального строительства отсутствуют.'"
         ),
     )
-    restrictions_text: str = Field(
-        ...,
+    restrictions_text: Optional[str] = Field(
+        None,
         description=(
             "Описание ограничений по данным справок от уполномоченных органов: "
             "ООПТ, объекты культурного наследия, ЗСО, скотомогильники, свалки и т.д. "
@@ -211,8 +211,8 @@ class LandUse(BaseModel):
 class Technogenic(BaseModel):
     """2.1.6. Техногенное нарушение территории"""
 
-    description: str = Field(
-        ...,
+    description: Optional[str] = Field(
+        None,
         description=(
             "Описание техногенного состояния территории. "
             "Пример: 'В настоящее время территория участка представляет собой "
@@ -238,16 +238,16 @@ class Technogenic(BaseModel):
 class PhysicalFactors(BaseModel):
     """2.1.7. Физические факторы воздействия"""
 
-    noise_description: str = Field(
-        ...,
+    noise_description: Optional[str] = Field(
+        None,
         description=(
             "Описание результатов измерений шума. "
             "Пример: 'По результатам измерений эквивалентный уровень звука составил 48 дБА, "
             "максимальный – 56 дБА при нормативных значениях 55/70 дБА (дневное время).'"
         ),
     )
-    emf_description: str = Field(
-        ...,
+    emf_description: Optional[str] = Field(
+        None,
         description=(
             "Описание результатов измерений электромагнитных полей. "
             "Пример: 'Напряженность электрического поля промышленной частоты 50 Гц "
@@ -283,20 +283,20 @@ class Measures(BaseModel):
 class LandPlot(BaseModel):
     """Ссылка на модель LandPlot из models.py Главы 1 (минимальные поля для Главы 2)"""
 
-    cadastral_number: str = Field(
-        ...,
+    cadastral_number: Optional[str] = Field(
+        None,
         description="Кадастровый номер земельного участка",
     )
-    land_category: str = Field(
-        ...,
+    land_category: Optional[str] = Field(
+        None,
         description="Категория земель (например: земли населенных пунктов).",
     )
-    permitted_use: str = Field(
-        ...,
+    permitted_use: Optional[str] = Field(
+        None,
         description="Вид разрешенного использования.",
     )
-    area_sqm: float = Field(
-        ...,
+    area_sqm: Optional[float] = Field(
+        None,
         description="Площадь земельного участка в кв.м",
     )
     _part_name: str = PrivateAttr(default=["ПЗУ"])

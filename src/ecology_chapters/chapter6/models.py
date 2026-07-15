@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 class Flora(BaseModel):
     """Сведения о растительности района и участка (раздел 6.1)"""
 
-    region_description: str = Field(
-        ...,
+    region_description: Optional[str] = Field(
+        None,
         description=(
             "Общая характеристика растительности региона/субъекта РФ. (должна быть объемной и исчерпывающей, не должна дословно копировать источник) "
             "Пример: «Растительный покров Ленинградской области отличается значительным разнообразием...»"
@@ -28,16 +28,16 @@ class Flora(BaseModel):
         ),
         json_schema_extra= {"vanish": True},
     )
-    site_surface_description: str = Field(
-        ...,
+    site_surface_description: Optional[str] = Field(
+        None,
         description=(
             "Описание поверхности непосредственно на участке изысканий. "
             "Примеры: «Непосредственно поверхность исследуемой территории частично представлена асфальтом...»; "
             "«... поверхность занята нарушенной рудеральной растительностью ...»."
         ),
     )
-    site_community_type: str = Field(
-        ...,
+    site_community_type: Optional[str] = Field(
+        None,
         description=(
             "Тип растительного сообщества на участке. "
             "(Является продолжением предложения «На участке расположены»)"
@@ -45,8 +45,8 @@ class Flora(BaseModel):
             "«нарушенные луговые сообщества»."
         ),
     )
-    site_species_list: str = Field(
-        ...,
+    site_species_list: Optional[str] = Field(
+        None,
         description=(
             "Перечень видов растений, обнаруженных на участке. "
             "Пример: «мятлик однолетний, подорожник большой, одуванчик лекарственный»."
@@ -73,15 +73,15 @@ class Flora(BaseModel):
 class Fauna(BaseModel):
     """Сведения о животном мире района и участка (разделы 6.2–6.3)"""
 
-    region_description: str = Field(
-        ...,
+    region_description: Optional[str] = Field(
+        None,
         description=(
             "Общая характеристика животного мира региона. "
             "Пример: «Животный мир Ленинградской области достаточно богат...»"
         ),
     )
-    site_fauna_description: str = Field(
-        ...,
+    site_fauna_description: Optional[str] = Field(
+        None,
         description=(
             "Описание животного мира непосредственно на участке изысканий. "
             "Примеры: «Животный мир на участке изысканий представлен синантропными видами птиц (воробей, голубь)...»; "
@@ -96,8 +96,8 @@ class Fauna(BaseModel):
         ),
         json_schema_extra={"vanish": True},
     )
-    kotr_status: str = Field(
-        ...,
+    kotr_status: Optional[str] = Field(
+        None,
         description=(
             "Статус участка по карте КОТР. "
             "Примеры: «за пределами ключевых орнитологических территорий»; "
@@ -138,19 +138,19 @@ class Oopt(BaseModel):
         ),
         json_schema_extra={"vanish": True},
     )
-    nearest_oopt_name: str = Field(
-        ...,
+    nearest_oopt_name: Optional[str] = Field(
+        None,
         description=(
             "Наименование ближайшей ООПТ. "
             "Пример: «государственный природный заказник «Сестрорецкое болото»»."
         ),
     )
-    nearest_oopt_distance: str = Field(
-        ...,
+    nearest_oopt_distance: Optional[str] = Field(
+        None,
         description="Расстояние до ближайшей ООПТ. Пример: «3,2 км».",
     )
-    nearest_oopt_direction: str = Field(
-        ...,
+    nearest_oopt_direction: Optional[str] = Field(
+        None,
         description=(
             "Направление до ближайшей ООПТ. "
             "Пример: «северо-западу»; «востоку»."
@@ -176,8 +176,8 @@ class Oopt(BaseModel):
 class Recultivation(BaseModel):
     """Сведения о рекультивации (раздел 6.5)"""
 
-    type_description: str = Field(
-        ...,
+    type_description: Optional[str] = Field(
+        None,
         description=(
             "Описание видов рекультивации, предусмотренных проектом. "
             "Примеры: «техническая рекультивация»; "
