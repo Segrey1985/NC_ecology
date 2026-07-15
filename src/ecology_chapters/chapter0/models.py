@@ -1,9 +1,7 @@
-from typing import Optional, Literal
-from pydantic import BaseModel, Field
-
+from typing import Optional, Literal, Union, Any
+from pydantic import BaseModel, Field, field_validator
 
 # основная модель
-
 class StructuredResponse(BaseModel):
     answer: str = Field(
         ...,
@@ -14,9 +12,14 @@ class StructuredResponse(BaseModel):
         None, description="Дополнительные пояснения или контекст, если необходимы"
     )
 
+    @field_validator("answer", mode="before")
+    @classmethod
+    def coerce_answer_to_str(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
 
 # дополнительные модели к которым могут обращаться placeholders.json
-
 class TypeOfWork(BaseModel):
     answer: Literal["строительство", "реконструкция", "техническое перевооружение"] = Field(
         ..., description="Тип строительных работ (например, «строительство», «реконструкция», «техническое перевооружение»)"
